@@ -32,6 +32,7 @@ import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -52,7 +53,7 @@ public class CustomBossEntity extends EliteEntity implements Listener, Persisten
     public static Set<CustomBossEntity> dynamicLevelBossEntities = new HashSet<>();
     @Getter
     protected static HashSet<CustomBossEntity> trackableCustomBosses = new HashSet<>();
-    private static BukkitTask dynamicLevelUpdater = null;
+    private static Object dynamicLevelUpdater = null;
     private final List<BukkitTask> globalReinforcements = new ArrayList<>();
     @Getter
     protected CustomBossesConfigFields customBossesConfigFields;
@@ -143,36 +144,47 @@ public class CustomBossEntity extends EliteEntity implements Listener, Persisten
     }
 
     public static void startUpdatingDynamicLevels() {
-        dynamicLevelUpdater = new BukkitRunnable() {
-            @Override
-            public void run() {
-                Iterator<CustomBossEntity> iterator = dynamicLevelBossEntities.iterator();
-                while (iterator.hasNext()) {
-                    CustomBossEntity customBossEntity = iterator.next();
-                    if (!customBossEntity.isValid()) {
-                        iterator.remove(); // Remove from the list instead of canceling
-                        continue; // Skip to the next iteration
-                    }
-                    int currentLevel = customBossEntity.getLevel();
-                    customBossEntity.getDynamicLevel(customBossEntity.getLocation());
-                    int newLevel = customBossEntity.getLevel();
-
-                    if (currentLevel == newLevel) {
-                        continue; // Skip to the next iteration if the level hasn't changed
-                    }
-
-                    // In theory, the damage should update automatically; the only thing that needs updating should be the health
-                    customBossEntity.setMaxHealth();
-                    customBossEntity.setNormalizedHealth();
-                    CustomBossMegaConsumer.setName(customBossEntity.getLivingEntity(), customBossEntity, customBossEntity.level);
+        // Convert to Folia-compatible timer task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        TaskScheduler.TaskWrapper taskWrapper = taskScheduler.runTimerAsync(() -> {
+            Iterator<CustomBossEntity> iterator = dynamicLevelBossEntities.iterator();
+            while (iterator.hasNext()) {
+                CustomBossEntity customBossEntity = iterator.next();
+                if (!customBossEntity.isValid()) {
+                    iterator.remove(); // Remove from the list instead of canceling
+                    continue; // Skip to the next iteration
                 }
+                int currentLevel = customBossEntity.getLevel();
+                customBossEntity.getDynamicLevel(customBossEntity.getLocation());
+                int newLevel = customBossEntity.getLevel();
+
+                if (currentLevel == newLevel) {
+                    continue; // Skip to the next iteration if the level hasn't changed
+                }
+
+                // In theory, the damage should update automatically; the only thing that needs updating should be the health
+                customBossEntity.setMaxHealth();
+                customBossEntity.setNormalizedHealth();
+                CustomBossMegaConsumer.setName(customBossEntity.getLivingEntity(), customBossEntity, customBossEntity.level);
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 20 * 5L, 20 * 5L);
+        }, 20 * 5L, 20 * 5L);
+        
+        // Store a reference to the task wrapper for later cancellation
+        dynamicLevelUpdater = taskWrapper;
     }
 
     public static void shutdown() {
-        if (dynamicLevelUpdater != null)
-            dynamicLevelUpdater.cancel();
+        if (dynamicLevelUpdater != null) {
+            try {
+                if (dynamicLevelUpdater instanceof TaskScheduler.TaskWrapper) {
+                    ((TaskScheduler.TaskWrapper) dynamicLevelUpdater).cancel();
+                } else if (dynamicLevelUpdater instanceof BukkitTask) {
+                    ((BukkitTask) dynamicLevelUpdater).cancel();
+                }
+            } catch (Exception e) {
+                Logger.warn("Failed to cancel dynamic level updater task: " + e.getMessage());
+            }
+        }
         dynamicLevelBossEntities.clear();
         trackableCustomBosses.clear();
     }
@@ -535,7 +547,15 @@ public class CustomBossEntity extends EliteEntity implements Listener, Persisten
             if (!(this instanceof RegionalBossEntity) || this instanceof InstancedBossEntity)
                 EntityTracker.getEliteMobEntities().remove(super.eliteUUID);
             new EventCaller(new EliteMobRemoveEvent(this, removalReason));
-            if (escapeMechanism != null) Bukkit.getScheduler().cancelTask(escapeMechanism);
+            if (escapeMechanism != null) {
+                // Convert to Folia-compatible task cancellation
+                try {
+                    // escapeMechanism is an Integer task ID from Bukkit scheduler
+                    Bukkit.getScheduler().cancelTask(escapeMechanism);
+                } catch (Exception e) {
+                    Logger.warn("Failed to cancel escape mechanism task: " + e.getMessage());
+                }
+            }
             trackableCustomBosses.remove(this);
             if (persistentObjectHandler != null) {
                 persistentObjectHandler.remove();

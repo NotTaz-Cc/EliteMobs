@@ -21,6 +21,7 @@ import com.magmaguy.elitemobs.utils.shapes.Cylinder;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -38,6 +39,9 @@ public class ArenaInstance extends MatchInstance {
 
     @Getter
     private static final HashMap<String, ArenaInstance> arenaInstances = new HashMap<>();
+    
+    // FoliaLib scheduler instance
+    private TaskScheduler taskScheduler;
 
     public static void shutdown() {
         arenaInstances.clear();
@@ -71,6 +75,10 @@ public class ArenaInstance extends MatchInstance {
     public ArenaInstance(CustomArenasConfigFields customArenasConfigFields, Location corner1, Location corner2, Location startLocation, Location exitLocation) {
         super(startLocation, exitLocation, customArenasConfigFields.getMinimumPlayerCount(), customArenasConfigFields.getMaximumPlayerCount());
         if (cancelled) return;
+        
+        // Initialize FoliaLib scheduler
+        this.taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        
         this.cylindricalArena = customArenasConfigFields.isCylindricalArena();
 
         super.lobbyLocation = customArenasConfigFields.getTeleportLocation();
@@ -210,35 +218,68 @@ public class ArenaInstance extends MatchInstance {
             delayBetweenWaves *= 2;
         }
 
-        Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, () -> {
-            if (arenaState == ArenaState.IDLE) return;
-            String title = ArenasConfig.getWaveTitle();
-            String subtitle = ArenasConfig.getWaveSubtitle();
-            if (title == null) title = "";
-            if (subtitle == null) subtitle = "";
+        // Convert to Folia-compatible scheduling
+        if (taskScheduler != null) {
+            taskScheduler.runDelayedAsync(() -> {
+                if (arenaState == ArenaState.IDLE) return;
+                String title = ArenasConfig.getWaveTitle();
+                String subtitle = ArenasConfig.getWaveSubtitle();
+                if (title == null) title = "";
+                if (subtitle == null) subtitle = "";
 
-            String finalTitle = title;
-            String finalSubtitle = subtitle;
-            players.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
-            spectators.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
-            spawnBosses();
-            arenaState = ArenaState.ACTIVE;
-            roundDamage.clear();
-        }, 20L * delayBetweenWaves);
+                String finalTitle = title;
+                String finalSubtitle = subtitle;
+                players.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
+                spectators.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
+                spawnBosses();
+                arenaState = ArenaState.ACTIVE;
+                roundDamage.clear();
+            }, 20L * delayBetweenWaves);
+        } else {
+            // Fallback to old method
+            Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, () -> {
+                if (arenaState == ArenaState.IDLE) return;
+                String title = ArenasConfig.getWaveTitle();
+                String subtitle = ArenasConfig.getWaveSubtitle();
+                if (title == null) title = "";
+                if (subtitle == null) subtitle = "";
+
+                String finalTitle = title;
+                String finalSubtitle = subtitle;
+                players.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
+                spectators.forEach(player -> player.sendTitle(finalTitle.replace("$wave", currentWave + ""), finalSubtitle.replace("$wave", currentWave + ""), 0, 20, 0));
+                spawnBosses();
+                arenaState = ArenaState.ACTIVE;
+                roundDamage.clear();
+            }, 20L * delayBetweenWaves);
+        }
     }
 
     private void arenaWatchdog() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
+        if (taskScheduler != null) {
+            // Convert to Folia-compatible timer task
+            taskScheduler.runTimerAsync(() -> {
                 if (arenaState != ArenaState.ACTIVE) return;
                 for (CustomBossEntity customBossEntity : (HashSet<CustomBossEntity>) customBosses.clone())
                     if (!customBossEntity.exists()) removeBoss(customBossEntity);
                 if (!nonEliteMobsEntities.isEmpty())
                     for (Entity entity : (HashSet<Entity>) nonEliteMobsEntities.clone())
                         if (!entity.isValid()) removeBoss(entity);
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0L, 20L);
+            }, 0L, 20L);
+        } else {
+            // Fallback to old method
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (arenaState != ArenaState.ACTIVE) return;
+                    for (CustomBossEntity customBossEntity : (HashSet<CustomBossEntity>) customBosses.clone())
+                        if (!customBossEntity.exists()) removeBoss(customBossEntity);
+                    if (!nonEliteMobsEntities.isEmpty())
+                        for (Entity entity : (HashSet<Entity>) nonEliteMobsEntities.clone())
+                            if (!entity.isValid()) removeBoss(entity);
+                }
+            }.runTaskTimer(MetadataHandler.PLUGIN, 0L, 20L);
+        }
     }
 
     public void removeBoss(CustomBossEntity customBossEntity) {

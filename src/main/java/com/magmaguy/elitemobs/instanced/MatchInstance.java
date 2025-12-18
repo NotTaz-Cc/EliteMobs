@@ -11,6 +11,7 @@ import com.magmaguy.elitemobs.config.DefaultConfig;
 import com.magmaguy.elitemobs.playerdata.database.PlayerData;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -56,6 +57,9 @@ public abstract class MatchInstance {
     protected String permission = null;
     @Getter
     protected boolean cancelled = false;
+    
+    // FoliaLib scheduler instance
+    protected TaskScheduler taskScheduler;
 
 
     public MatchInstance(Location startLocation, Location exitLocation, int minPlayers, int maxPlayers) {
@@ -64,6 +68,9 @@ public abstract class MatchInstance {
             cancelled = true;
             return;
         }
+
+        // Initialize FoliaLib scheduler
+        this.taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
 
         this.startLocation = startLocation;
         this.exitLocation = exitLocation;
