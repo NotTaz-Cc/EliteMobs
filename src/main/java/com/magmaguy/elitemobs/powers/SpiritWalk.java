@@ -10,6 +10,7 @@ import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
 import com.magmaguy.elitemobs.mobconstructor.custombosses.RegionalBossEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -75,7 +76,9 @@ public class SpiritWalk extends BossPower implements Listener {
     }
 
     public static void spiritWalkRegionalBossAnimation(EliteEntity eliteEntity, Location entityLocation, Location finalLocation) {
-        Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, bukkitTask -> {
+        // Convert to Folia-compatible task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runAsync(() -> {
                     if (eliteEntity.getLivingEntity() == null) return;
                     eliteEntity.getLivingEntity().setAI(false);
                     eliteEntity.getLivingEntity().setInvulnerable(true);

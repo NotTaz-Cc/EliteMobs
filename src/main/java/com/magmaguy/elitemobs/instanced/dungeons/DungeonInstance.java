@@ -23,6 +23,7 @@ import com.magmaguy.elitemobs.utils.WorldInstantiator;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.TemporaryWorldManager;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -53,6 +54,9 @@ public class DungeonInstance extends MatchInstance {
     private String difficultyName = null;
     @Getter
     private String difficultyID = null;
+    
+    // FoliaLib scheduler instance
+    private TaskScheduler taskScheduler;
 
     public DungeonInstance(ContentPackagesConfigFields contentPackagesConfigFields,
                            Location lobbyLocation,
@@ -65,6 +69,10 @@ public class DungeonInstance extends MatchInstance {
                 contentPackagesConfigFields.getMinPlayerCount(),
                 contentPackagesConfigFields.getMaxPlayerCount());
         if (cancelled) return;
+        
+        // Initialize FoliaLib scheduler
+        this.taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        
         super.lobbyLocation = lobbyLocation;
         this.contentPackagesConfigFields = contentPackagesConfigFields;
         for (String rawObjective : contentPackagesConfigFields.getRawDungeonObjectives())

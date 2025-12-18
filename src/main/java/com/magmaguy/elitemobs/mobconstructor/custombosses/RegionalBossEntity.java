@@ -20,6 +20,7 @@ import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Location;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -42,7 +43,7 @@ public class RegionalBossEntity extends CustomBossEntity implements PersistentOb
     private long unixRespawnTime;
     private int respawnCoolDownInMinutes = -1;
     private boolean isRespawning = false;
-    private BukkitTask leashTask;
+    private Object leashTask; // Can be either BukkitTask or TaskScheduler.TaskWrapper
     @Getter
     @Setter
     private List<TransitiveBlock> onSpawnTransitiveBlocks;
@@ -123,12 +124,11 @@ public class RegionalBossEntity extends CustomBossEntity implements PersistentOb
     }
 
     public static void regionalDataSaver() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                save();
-            }
-        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 20L * 5, 20L * 5);
+        // Convert to Folia-compatible timer task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runTimerAsync(() -> {
+            save();
+        }, 20L * 5, 20L * 5);
     }
 
     public static void save() {
@@ -229,8 +229,16 @@ public class RegionalBossEntity extends CustomBossEntity implements PersistentOb
         if (leashRadius < 1)
             return;
         RegionalBossEntity regionalBossEntity = this;
-        if (leashTask != null) leashTask.cancel();
-        leashTask = Bukkit.getScheduler().runTaskTimerAsynchronously(MetadataHandler.PLUGIN, () -> {
+        if (leashTask != null) {
+            if (leashTask instanceof TaskScheduler.TaskWrapper) {
+                ((TaskScheduler.TaskWrapper) leashTask).cancel();
+            } else {
+                if (leashTask instanceof TaskScheduler.TaskWrapper) ((TaskScheduler.TaskWrapper) leashTask).cancel(); else if (leashTask instanceof BukkitTask) ((BukkitTask) leashTask).cancel();
+            }
+        }
+        // Convert to Folia-compatible timer task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        TaskScheduler.TaskWrapper taskWrapper = taskScheduler.runTimerAsync(() -> {
             try {
                 if (!isValid()) {
                     cancelLeash();
@@ -243,11 +251,20 @@ public class RegionalBossEntity extends CustomBossEntity implements PersistentOb
                 Logger.warn("Async leash task errored!");
             }
         }, 20L * 3, 20L * 3);
+        leashTask = (BukkitTask) taskWrapper; // Store for compatibility
     }
 
     private void cancelLeash() {
         if (leashTask == null) return;
-        leashTask.cancel();
+        try {
+            if (leashTask instanceof TaskScheduler.TaskWrapper) {
+                ((TaskScheduler.TaskWrapper) leashTask).cancel();
+            } else if (leashTask instanceof BukkitTask) {
+                ((BukkitTask) leashTask).cancel();
+            }
+        } catch (Exception e) {
+            Logger.warn("Failed to cancel leash task: " + e.getMessage());
+        }
         leashTask = null;
     }
 

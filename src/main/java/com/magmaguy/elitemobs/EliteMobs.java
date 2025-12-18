@@ -94,6 +94,7 @@ import com.magmaguy.elitemobs.wormhole.Wormhole;
 import com.magmaguy.elitemobs.wormhole.WormholeManager;
 import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.util.Logger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -112,6 +113,9 @@ public class EliteMobs extends JavaPlugin {
     public static boolean worldGuardIsEnabled = false;
     public static Metrics metrics;
     public Object placeholders = null;
+    
+    // FoliaLib scheduler instance
+    private TaskScheduler taskScheduler;
 
     public static void initializeConfigs() {
         new CustomModelsConfig();
@@ -155,6 +159,9 @@ public class EliteMobs extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        // Initialize FoliaLib scheduler
+        this.taskScheduler = new TaskScheduler(this);
+        
         Bukkit.getLogger().info(" _____ _     _____ _____ ________  ______________  _____");
         Bukkit.getLogger().info("|  ___| |   |_   _|_   _|  ___|  \\/  |  _  | ___ \\/  ___|");
         Bukkit.getLogger().info("| |__ | |     | |   | | | |__ | .  . | | | | |_/ /\\ `--.");
@@ -221,6 +228,9 @@ public class EliteMobs extends JavaPlugin {
 
         //Start the repeating tasks such as scanners
         launchRunnables();
+
+        // Initialize FoliaLib in key classes
+        EntityTracker.initializeFoliaLib(this);
 
         //launch events
         ActionEvent.initializeBlueprintEvents();
@@ -311,7 +321,8 @@ public class EliteMobs extends JavaPlugin {
 
         // Regenerate cached item stacks after all plugins have loaded
         // This ensures custom skins are applied correctly (ResourcePackManager may not be loaded during initial item generation)
-        Bukkit.getScheduler().runTask(this, CustomItem::regenerateCachedItemStacks);
+        // Converted to Folia-compatible scheduling
+        taskScheduler.runAsync(CustomItem::regenerateCachedItemStacks);
     }
 
     @Override

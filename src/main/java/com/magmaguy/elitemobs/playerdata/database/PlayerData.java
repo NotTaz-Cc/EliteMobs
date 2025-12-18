@@ -11,6 +11,7 @@ import com.magmaguy.elitemobs.quests.playercooldowns.PlayerQuestCooldowns;
 import com.magmaguy.elitemobs.utils.ConfigurationLocation;
 import com.magmaguy.elitemobs.utils.ObjectSerializer;
 import com.magmaguy.magmacore.util.Logger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
@@ -99,34 +100,34 @@ public class PlayerData {
         }
         PermissionAttachment permissionAttachment = player.addAttachment(MetadataHandler.PLUGIN);
         permissionAttachment.setPermission("elitequest.*", false);
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                Statement statement = null;
-                try {
-                    statement = getConnection().createStatement();
-                    ResultSet resultSet = statement.executeQuery("SELECT * FROM " + PLAYER_DATA_TABLE_NAME + " WHERE PlayerUUID = '" + uuid + "';");
-                    if (resultSet.next()) {
-                        readExistingData(statement, uuid, resultSet);
-                    } else {
-                        writeNewData(statement, uuid);
-                    }
-                    resultSet.close();
-                    statement.close();
-                } catch (Exception e) {
-                    if (statement != null) {
-                        try {
-                            statement.close();
-                        } catch (SQLException throwables) {
-                            Logger.warn("Failed to close statement after failing player data creation!");
-                            throwables.printStackTrace();
-                        }
-                    }
-                    Logger.warn("Something went wrong while generating a new player entry. This is bad! Tell the dev.");
-                    Logger.warn(e.getClass().getName() + ": " + e.getMessage());
+        
+        // Convert to Folia-compatible async task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runAsync(() -> {
+            Statement statement = null;
+            try {
+                statement = getConnection().createStatement();
+                ResultSet resultSet = statement.executeQuery("SELECT * FROM " + PLAYER_DATA_TABLE_NAME + " WHERE PlayerUUID = '" + uuid + "';");
+                if (resultSet.next()) {
+                    readExistingData(statement, uuid, resultSet);
+                } else {
+                    writeNewData(statement, uuid);
                 }
+                resultSet.close();
+                statement.close();
+            } catch (Exception e) {
+                if (statement != null) {
+                    try {
+                        statement.close();
+                    } catch (SQLException throwables) {
+                        Logger.warn("Failed to close statement after failing player data creation!");
+                        throwables.printStackTrace();
+                    }
+                }
+                Logger.warn("Something went wrong while generating a new player entry. This is bad! Tell the dev.");
+                Logger.warn(e.getClass().getName() + ": " + e.getMessage());
             }
-        }.runTaskAsynchronously(MetadataHandler.PLUGIN);
+        });
     }
 
     public static PlayerData getPlayerData(UUID player) {
@@ -359,28 +360,27 @@ public class PlayerData {
     }
 
     public static void setDatabaseValue(UUID uuid, String key, Object value) {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                Statement statement = null;
-                try {
-                    statement = getConnection().createStatement();
-                    String sql;
-                    if (value instanceof String) {
-                        sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = '" + value + "' WHERE PlayerUUID = '" + uuid.toString() + "';";
-                    } else if (value instanceof Boolean) {
-                        sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = " + (((Boolean) value) ? 1 : 0) + " WHERE PlayerUUID = '" + uuid.toString() + "';";
-                    } else {
-                        sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = " + value + " WHERE PlayerUUID = '" + uuid.toString() + "';";
-                    }
-                    statement.executeUpdate(sql);
-                    statement.close();
-                } catch (Exception e) {
-                    Logger.warn("Failed to update database value.");
-                    e.printStackTrace();
+        // Convert to Folia-compatible async task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runAsync(() -> {
+            Statement statement = null;
+            try {
+                statement = getConnection().createStatement();
+                String sql;
+                if (value instanceof String) {
+                    sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = '" + value + "' WHERE PlayerUUID = '" + uuid.toString() + "';";
+                } else if (value instanceof Boolean) {
+                    sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = " + (((Boolean) value) ? 1 : 0) + " WHERE PlayerUUID = '" + uuid.toString() + "';";
+                } else {
+                    sql = "UPDATE " + PLAYER_DATA_TABLE_NAME + " SET " + key + " = " + value + " WHERE PlayerUUID = '" + uuid.toString() + "';";
                 }
+                statement.executeUpdate(sql);
+                statement.close();
+            } catch (Exception e) {
+                Logger.warn("Failed to update database value.");
+                e.printStackTrace();
             }
-        }.runTaskAsynchronously(MetadataHandler.PLUGIN);
+        });
     }
 
     private static Object getDatabaseBlob(UUID uuid, String value) {
@@ -746,24 +746,22 @@ public class PlayerData {
     public static class PlayerDataEvents implements Listener {
         @EventHandler(priority = EventPriority.LOWEST)
         public void onPlayerLogin(PlayerJoinEvent event) {
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (Bukkit.getPlayer(event.getPlayer().getUniqueId()) == null) return;
-                    new PlayerData(event.getPlayer().getUniqueId());
-                }
-            }.runTaskLaterAsynchronously(MetadataHandler.PLUGIN, 20);
+            // Convert to Folia-compatible delayed async task
+            TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            taskScheduler.runDelayedAsync(() -> {
+                if (Bukkit.getPlayer(event.getPlayer().getUniqueId()) == null) return;
+                new PlayerData(event.getPlayer().getUniqueId());
+            }, 20);
         }
 
         @EventHandler
         public void onPlayerLogout(PlayerQuitEvent event) {
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    clearPlayerData(event.getPlayer().getUniqueId());
-                    setDisplayName(event.getPlayer().getUniqueId(), event.getPlayer().getName());
-                }
-            }.runTaskLaterAsynchronously(MetadataHandler.PLUGIN, 20);
+            // Convert to Folia-compatible delayed async task
+            TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            taskScheduler.runDelayedAsync(() -> {
+                clearPlayerData(event.getPlayer().getUniqueId());
+                setDisplayName(event.getPlayer().getUniqueId(), event.getPlayer().getName());
+            }, 20);
         }
     }
 
