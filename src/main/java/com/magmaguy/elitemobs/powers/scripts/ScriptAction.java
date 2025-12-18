@@ -18,6 +18,7 @@ import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
@@ -135,12 +136,9 @@ public class ScriptAction {
         }
 
         if (blueprint.getWait().getValue() > 0) {
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    runScriptTask(scriptActionData);
-                }
-            }.runTaskLater(MetadataHandler.PLUGIN, blueprint.getWait().getValue());
+            // Convert to Folia-compatible delayed task
+            TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            taskScheduler.runDelayedAsync(() -> runScriptTask(scriptActionData), blueprint.getWait().getValue());
         } else {
             runScriptTask(scriptActionData);
         }
