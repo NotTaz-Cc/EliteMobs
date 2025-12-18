@@ -8,6 +8,8 @@ import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
 import com.magmaguy.elitemobs.powers.meta.ProjectileTagger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -112,7 +114,9 @@ public class FrostCone extends BossPower implements Listener {
         Projectile snowball = EliteProjectile.create(EntityType.SNOWBALL, eliteEntity.getLivingEntity(), getShotVector(eliteEntity, location), false);
         ProjectileTagger.tagProjectileWithCustomDamage(snowball, 2);
         snowball.getPersistentDataContainer().set(frostConeSnowballKey, PersistentDataType.STRING, "true");
-        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, snowball::remove, 20L * 3);
+        // Convert to Folia-compatible delayed task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runDelayedAsync(snowball::remove, 20L * 3);
         return (Snowball) snowball;
     }
 
@@ -138,16 +142,14 @@ public class FrostCone extends BossPower implements Listener {
         else
             frostconePlayer.put(playerUUID, frostconePlayer.get(playerUUID) + 1);
         event.getPlayer().addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * 7, frostconePlayer.get(playerUUID)));
-        new BukkitRunnable() {
-            final int amount = frostconePlayer.get(playerUUID);
-
-            @Override
-            public void run() {
-                if (!frostconePlayer.containsKey(playerUUID)) return;
-                if (amount != frostconePlayer.get(playerUUID)) return;
-                frostconePlayer.remove(playerUUID);
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, 20L * 5);
+        // Convert to Folia-compatible delayed task
+        final int amount = frostconePlayer.get(playerUUID);
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runDelayedAsync(() -> {
+            if (!frostconePlayer.containsKey(playerUUID)) return;
+            if (amount != frostconePlayer.get(playerUUID)) return;
+            frostconePlayer.remove(playerUUID);
+        }, 20L * 5);
     }
 
 }

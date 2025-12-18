@@ -17,6 +17,7 @@ import com.magmaguy.elitemobs.wormhole.Wormhole;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.SpigotMessage;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -96,16 +97,15 @@ public class QuestTracking {
     }
 
     private void startLocationGetter() {
-        locationRefresher = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!player.isValid()) {
-                    stop();
-                    return;
-                }
-                updateLocations(customQuest);
+        // Convert to Folia-compatible timer task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runTimerAsync(() -> {
+            if (!player.isValid()) {
+                stop();
+                return;
             }
-        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0L, 20L * 60L);
+            updateLocations(customQuest);
+        }, 0L, 20L * 60L);
     }
 
     public void updateLocations(Quest quest) {
@@ -120,7 +120,9 @@ public class QuestTracking {
                         destinations.addAll(getDialogLocations((DialogObjective) objective));
                     else if (objective instanceof CustomFetchObjective)
                         destinations.addAll(getFetchLocations((CustomFetchObjective) objective));
-            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> objectiveDestinations = destinations);
+            // Convert to Folia-compatible task
+            TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            taskScheduler.runAsync(() -> objectiveDestinations = destinations);
         } else {
             questIsDone = true;
             getTurnInNPC();
@@ -182,12 +184,11 @@ public class QuestTracking {
 
     public void stop() {
         playerTrackingQuests.remove(player.getUniqueId());
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
-            }
-        }.runTask(MetadataHandler.PLUGIN);
+        // Convert to Folia-compatible task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runAsync(() -> {
+            player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
+        });
         locationRefresher.cancel();
         compassTask.cancel();
         compassBar.removeAll();
@@ -195,16 +196,15 @@ public class QuestTracking {
 
     private void startCompass() {
         compassBar = Bukkit.createBossBar("", BarColor.GREEN, BarStyle.SOLID, BarFlag.PLAY_BOSS_MUSIC);
-        compassTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!player.isOnline()) {
-                    stop();
-                    return;
-                }
-                updateCompassContents();
+        // Convert to Folia-compatible timer task
+        TaskScheduler taskScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        taskScheduler.runTimerAsync(() -> {
+            if (!player.isOnline()) {
+                stop();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0L, 1L);
+            updateCompassContents();
+        }, 0L, 1L);
     }
 
     private void updateCompassContents() {
