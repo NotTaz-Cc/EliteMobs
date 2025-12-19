@@ -10,6 +10,8 @@ import com.magmaguy.elitemobs.quests.CustomQuest;
 import com.magmaguy.elitemobs.quests.DynamicQuest;
 import com.magmaguy.elitemobs.quests.Quest;
 import com.magmaguy.elitemobs.utils.VisualDisplay;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -20,8 +22,6 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.util.HashSet;
@@ -29,45 +29,43 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class NPCProximitySensor implements Listener {
 
     private static final Set<UUID> nearbyPlayers = new HashSet<>();
-    private static BukkitTask proximityScanTask = null;
+    private static TaskWrapper proximityScanTask = null;
 
     public NPCProximitySensor() {
-        proximityScanTask = new BukkitRunnable() {
-
-            @Override
-            public void run() {
-                Set<UUID> unseenPlayerList = new HashSet<>(nearbyPlayers);
-                for (NPCEntity npcEntity : EntityTracker.getNpcEntities().values()) {
-                    if (!npcEntity.isValid()) continue;
-                    for (Entity entity : npcEntity.getVillager().getNearbyEntities(npcEntity.getNPCsConfigFields().getActivationRadius(),
-                            npcEntity.getNPCsConfigFields().getActivationRadius(), npcEntity.getNPCsConfigFields().getActivationRadius())) {
-                        if (!entity.getType().equals(EntityType.PLAYER)) continue;
-                        Player player = (Player) entity;
-                        UUID playerUUID = player.getUniqueId();
-                        Location rotatedLocation = npcEntity.getVillager().getLocation().setDirection(entity.getLocation().subtract(npcEntity.getVillager().getLocation()).toVector());
-                        npcEntity.getVillager().teleport(rotatedLocation);
-                        if (unseenPlayerList.contains(playerUUID)) {
-                            if (!npcEntity.getNPCsConfigFields().getInteractionType().equals(NPCInteractions.NPCInteractionType.CHAT))
-                                npcEntity.sayDialog(player);
-                            unseenPlayerList.remove(playerUUID);
-                        } else {
-                            npcEntity.sayGreeting(player);
-                            nearbyPlayers.add(playerUUID);
-                            startQuestIndicator(npcEntity, player);
-                        }
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        
+        Runnable timerTask = () -> {
+            Set<UUID> unseenPlayerList = new HashSet<>(nearbyPlayers);
+            for (NPCEntity npcEntity : EntityTracker.getNpcEntities().values()) {
+                if (!npcEntity.isValid()) continue;
+                for (Entity entity : npcEntity.getVillager().getNearbyEntities(npcEntity.getNPCsConfigFields().getActivationRadius(),
+                        npcEntity.getNPCsConfigFields().getActivationRadius(), npcEntity.getNPCsConfigFields().getActivationRadius())) {
+                    if (!entity.getType().equals(EntityType.PLAYER)) continue;
+                    Player player = (Player) entity;
+                    UUID playerUUID = player.getUniqueId();
+                    Location rotatedLocation = npcEntity.getVillager().getLocation().setDirection(entity.getLocation().subtract(npcEntity.getVillager().getLocation()).toVector());
+                    npcEntity.getVillager().teleport(rotatedLocation);
+                    if (unseenPlayerList.contains(playerUUID)) {
+                        if (!npcEntity.getNPCsConfigFields().getInteractionType().equals(NPCInteractions.NPCInteractionType.CHAT))
+                            npcEntity.sayDialog(player);
+                        unseenPlayerList.remove(playerUUID);
+                    } else {
+                        npcEntity.sayGreeting(player);
+                        nearbyPlayers.add(playerUUID);
+                        startQuestIndicator(npcEntity, player);
                     }
                 }
-
-                nearbyPlayers.removeAll(unseenPlayerList);
-
             }
 
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 20L * 5L);
+            nearbyPlayers.removeAll(unseenPlayerList);
+        };
 
+        proximityScanTask = scheduler.runTimerAsync(timerTask, 0, 20L * 5L);
     }
 
     public static void shutdown() {
@@ -154,13 +152,16 @@ public class NPCProximitySensor implements Listener {
         TextDisplay visualArmorStand = VisualDisplay.generateTemporaryTextDisplay(newLocation, messageUp);
         AtomicInteger counter = new AtomicInteger();
         AtomicBoolean up = new AtomicBoolean(true);
-        Bukkit.getScheduler().runTaskTimer(MetadataHandler.PLUGIN, task -> {
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+
+        Runnable timerTask = () -> {
             if (!player.isValid() ||
                     npcEntity.getVillager() == null ||
                     !npcEntity.getVillager().isValid() ||
                     !npcEntity.getVillager().getWorld().equals(player.getWorld()) ||
                     npcEntity.getVillager().getLocation().distance(player.getLocation()) > npcEntity.getNPCsConfigFields().getActivationRadius()) {
-                task.cancel();
+                if (taskRef.get() != null) taskRef.get().cancel();
                 EntityTracker.unregister(visualArmorStand, RemovalReason.EFFECT_TIMEOUT);
                 return;
             }
@@ -176,8 +177,9 @@ public class NPCProximitySensor implements Listener {
             }
 
             visualArmorStand.teleport(visualArmorStand.getLocation().clone().add(new Vector(0, up.get() ? 0.01 : -0.01, 0)));
+        };
 
-        }, 0L, 1L);
+        taskRef.set(scheduler.runTimerAsync(timerTask, 0L, 1L));
     }
 
     @EventHandler

@@ -13,10 +13,10 @@ import com.magmaguy.elitemobs.thirdparty.worldguard.WorldGuardFlagChecker;
 import com.magmaguy.elitemobs.utils.CommandRunner;
 import com.magmaguy.magmacore.instance.MatchInstance;
 import com.magmaguy.magmacore.util.Logger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +30,7 @@ public abstract class CustomEvent {
     //Common fields
     public EventType eventType;
     public ArrayList<CustomBossEntity> primaryEliteMobs = new ArrayList<>();
-    public BukkitTask eventWatchdog;
+    public TaskWrapper eventWatchdog;
     public int announcementPriority;
     public CustomEventsConfigFields customEventsConfigFields;
     public String startMessage, endMessage;
@@ -104,13 +104,13 @@ public abstract class CustomEvent {
             CommandRunner.runCommandFromList(this.startEventCommands, new ArrayList<>());
         eventStartTime = System.currentTimeMillis();
         currentDay = dayCalculator();
-        eventWatchdog = new BukkitRunnable() {
-            @Override
-            public void run() {
-                commonWatchdogBehavior();
-                eventWatchdog();
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 20, 20);
+        
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        Runnable timerTask = () -> {
+            commonWatchdogBehavior();
+            eventWatchdog();
+        };
+        eventWatchdog = scheduler.runTimerAsync(timerTask, 20, 20);
     }
 
     private int dayCalculator() {
@@ -166,8 +166,10 @@ public abstract class CustomEvent {
         });
         if (this.endMessage != null)
             AnnouncementPriority.announce(this.endMessage, eventStartLocation.getWorld(), this.announcementPriority);
-        if (this.endEventCommands != null)
-            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> CommandRunner.runCommandFromList(this.endEventCommands, new ArrayList<>()));
+        if (this.endEventCommands != null) {
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            scheduler.runAsync(() -> CommandRunner.runCommandFromList(this.endEventCommands, new ArrayList<>()));
+        }
         endModifiers();
     }
 

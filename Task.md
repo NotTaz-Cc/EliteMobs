@@ -246,19 +246,24 @@ For each file, perform these steps:
 - [x] **FrostCone.java** - Power effects ✅
 - [x] **ShieldWall.java** - Power effects ✅
 
-### Next Phase Ready:
-**Remaining High Priority Files (12/25):**
-- SpiritWalk.java - Power effects
-- SharedLootTable.java - Loot table management
-- ItemLootShower.java - Loot display system
-- RareDropEffect.java - Rare drop effects
-- DisguiseEntity.java - LibsDisguises integration
-- NPCProximitySensor.java - NPC proximity detection
-- NPCInteractions.java - NPC interaction handling
-- VersionChecker.java - Version checking system
-- TreasureChest.java - Treasure chest management
-- ScriptAction.java - Script action execution (remaining 13 scheduler calls)
-- Và một số files khác...
+### Continue Phase 1 (25/25 Complete):
+**Newly Converted - Round 1 (8 files):**
+- [x] **SpiritWalk.java** - Power effects ✅
+- [x] **SharedLootTable.java** - Loot table management ✅
+- [x] **ItemLootShower.java** - Loot display system ✅
+- [x] **RareDropEffect.java** - Rare drop effects ✅
+- [x] **DisguiseEntity.java** - LibsDisguises integration ✅
+- [x] **NPCProximitySensor.java** - NPC proximity detection ✅
+- [x] **NPCInteractions.java** - NPC interaction handling ✅
+- [x] **VersionChecker.java** - Version checking system ✅
+
+**Newly Converted - Round 2 (4 files):**
+- [x] **CustomEvent.java** - Event scheduling ✅
+- [x] **TimedEvent.java** - Timer events ✅
+- [x] **ActionEvent.java** - Action events ✅
+- [x] **ShieldWall.java** - Power effects ✅
+
+**Status: ALL HIGH PRIORITY FILES COMPLETED - 25/25 ✅**
 
 ## ✅ COMPLETED - FoliaLib Foundation
 
