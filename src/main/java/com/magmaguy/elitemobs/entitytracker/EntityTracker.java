@@ -13,6 +13,7 @@ import com.magmaguy.elitemobs.utils.EventCaller;
 import lombok.Getter;
 import me.MinhTaz.FoliaLib.EntityManager;
 import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import me.MinhTaz.FoliaLib.WorldManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -28,8 +29,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -84,7 +85,7 @@ public class EntityTracker implements Listener {
         return PersistentTagger.getEliteEntity(entity);
     }
 
-    private static BukkitTask ManagedEntityTask = null;
+    private static TaskWrapper ManagedEntityTask = null;
 
     public static void registerVisualEffects(Entity entity) {
         PersistentTagger.tagVisualEffect(entity);
@@ -157,22 +158,19 @@ public class EntityTracker implements Listener {
                 });
             }, ticks);
         } else {
-            // Fallback to old method
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (Bukkit.getWorld(worldUUID) == null) return;
-                    temporaryBlocks.remove(block);
-                    if (!block.getBlockData().equals(finalPreviousBlockData))
-                        if (finalPreviousBlockData != null)
-                            //Case if a temp block was placed and now needs to be restored
-                            block.setBlockData(finalPreviousBlockData);
-                        else
-                            //Case if a temp block was placed on a temp block
-                            block.setType(Material.AIR);
-                }
-            }.runTaskLater(MetadataHandler.PLUGIN, ticks);
-        }
+             // Fallback to old method
+             new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> {
+                 if (Bukkit.getWorld(worldUUID) == null) return;
+                 temporaryBlocks.remove(block);
+                 if (!block.getBlockData().equals(finalPreviousBlockData))
+                     if (finalPreviousBlockData != null)
+                         //Case if a temp block was placed and now needs to be restored
+                         block.setBlockData(finalPreviousBlockData);
+                     else
+                         //Case if a temp block was placed on a temp block
+                         block.setType(Material.AIR);
+             }, ticks);
+         }
     }
 
     public static boolean isTemporaryBlock(Block block) {
@@ -272,7 +270,7 @@ public class EntityTracker implements Listener {
     public static void managedEntityWatchdog() {
         if (taskScheduler != null) {
             // Convert to Folia-compatible timer task
-            ManagedEntityTask = (org.bukkit.scheduler.BukkitTask) taskScheduler.runTimerAsync(() -> {
+            ManagedEntityTask = taskScheduler.runTimerAsync(() -> {
                 // Safely iterate over eliteMobEntities by cloning the values first to avoid CME
                 new HashSet<>(eliteMobEntities.values()).forEach(value -> {
                     if (value.getLivingEntity() != null && !value.getLivingEntity().isValid()) {
@@ -288,26 +286,23 @@ public class EntityTracker implements Listener {
                 });
             }, 0, 1);
         } else {
-            // Fallback to old method
-            ManagedEntityTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    // Safely iterate over eliteMobEntities by cloning the values first to avoid CME
-                    new HashSet<>(eliteMobEntities.values()).forEach(value -> {
-                        if (value.getLivingEntity() != null && !value.getLivingEntity().isValid()) {
-                            value.remove(RemovalReason.CHUNK_UNLOAD);
-                        }
-                    });
+             // Fallback to old method
+             ManagedEntityTask = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+                 // Safely iterate over eliteMobEntities by cloning the values first to avoid CME
+                 new HashSet<>(eliteMobEntities.values()).forEach(value -> {
+                     if (value.getLivingEntity() != null && !value.getLivingEntity().isValid()) {
+                         value.remove(RemovalReason.CHUNK_UNLOAD);
+                     }
+                 });
 
-                    // Safely iterate over npcEntities by cloning the values first to avoid CME
-                    new HashSet<>(npcEntities.values()).forEach(value -> {
-                        if (value.getVillager() != null && !value.getVillager().isValid()) {
-                            value.remove(RemovalReason.CHUNK_UNLOAD);
-                        }
-                    });
-                }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-        }
+                 // Safely iterate over npcEntities by cloning the values first to avoid CME
+                 new HashSet<>(npcEntities.values()).forEach(value -> {
+                     if (value.getVillager() != null && !value.getVillager().isValid()) {
+                         value.remove(RemovalReason.CHUNK_UNLOAD);
+                     }
+                 });
+             }, 0, 1);
+         }
     }
 
     @EventHandler(ignoreCancelled = true)
