@@ -286,7 +286,18 @@ For each file, perform these steps:
 - [x] **DungeonInstance.java** - Dungeon instance system (3 scheduler calls) ✅
 - [x] **ArenaInstance.java** - Arena instance system (1 BukkitRunnable) ✅
 
-**Status: MEDIUM PRIORITY (12/~60+ files) - IN PROGRESS**
+**Newly Converted - Round 5 (3 Power files):**
+- [x] **ArrowRain.java** - Arrow rain power (1 BukkitRunnable) ✅
+- [x] **MeteorShower.java** - Meteor shower power (1 BukkitRunnable) ✅
+- [x] **LightningBolts.java** - Lightning bolts power (2 BukkitRunnable) ✅
+
+**Status: MEDIUM PRIORITY (16/~60+ files) - IN PROGRESS**
+
+**Progress Summary:**
+- Phase 1 (High Priority): 25/25 ✅
+- Phase 2 (Medium Priority): 16/60+ (26.6% estimated)
+- Remaining Power files: ~46 files
+- Other systems: EntityTracker, CustomSpawn, PlayerPotionEffects, etc.
 
 **Next To Convert (High Impact):**
 - EliteEntity.java - Elite entity system
