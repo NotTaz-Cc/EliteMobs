@@ -265,6 +265,34 @@ For each file, perform these steps:
 
 **Status: ALL HIGH PRIORITY FILES COMPLETED - 25/25 ✅**
 
+### Phase 2 - Medium Priority Files (In Progress):
+**Newly Converted - Round 1 (3 files):**
+- [x] **BossHealthDisplay.java** - Combat display system ✅
+- [x] **TreasureChest.java** - Treasure chest management ✅
+- [x] **EliteProjectile.java** - Projectile system (no conversion needed) ✅
+
+**Newly Converted - Round 2 (4 files):**
+- [x] **CombatTag.java** - Combat tag system ✅
+- [x] **EventsPackage.java** - Event packages ✅
+- [x] **ItemsPackage.java** - Item packages ✅
+- [x] **WorldDungeonPackage.java** - World dungeon packages (no conversion needed) ✅
+
+**Newly Converted - Round 3 (3 files):**
+- [x] **EliteEntity.java** - Elite entity system (4 BukkitRunnable) ✅
+- [x] **NPCEntity.java** - NPC system (2 BukkitRunnable) ✅
+- [x] **Explosion.java** - Will convert next
+
+**Status: MEDIUM PRIORITY (10/~60+ files) - IN PROGRESS**
+
+**Next To Convert (High Impact):**
+- EliteEntity.java - Elite entity system
+- CustomBossEntity.java - Custom boss system  
+- NPCEntity.java - NPC system
+- NPCChatBubble.java - NPC chat display
+- 49 Power files (ArrowRain, Firestorm, MeteorShower, etc.) - BULK PRIORITY
+- Dungeon/Arena instance files
+- Many others...
+
 ## ✅ COMPLETED - FoliaLib Foundation
 
 ### Created FoliaLib Library Structure
