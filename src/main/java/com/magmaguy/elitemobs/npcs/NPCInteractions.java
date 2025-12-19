@@ -9,6 +9,7 @@ import com.magmaguy.elitemobs.playerdata.database.PlayerData;
 import com.magmaguy.elitemobs.quests.QuestInteractionHandler;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -18,7 +19,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -37,7 +37,8 @@ public class NPCInteractions implements Listener {
         UUID playerUUID = event.getPlayer().getUniqueId();
         if (cooldowns.contains(playerUUID)) return;
         cooldowns.add(playerUUID);
-        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> cooldowns.remove(playerUUID), 1);
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        scheduler.runDelayedAsync(() -> cooldowns.remove(playerUUID), 1);
         if (event.isCancelled()) return;
 
         NPCEntity npcEntity = EntityTracker.getNPCEntity(event.getRightClicked());
@@ -50,15 +51,13 @@ public class NPCInteractions implements Listener {
 
         event.setCancelled(true);
 
+        TaskScheduler npcScheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        
         switch (npcEntity.getNPCsConfigFields().getInteractionType()) {
             case GUILD_GREETER:
                 if (event.getPlayer().hasPermission("elitemobs.rank.npc")) {
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            GuildRankMenuHandler.initializeGuildRankMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() -> 
+                        GuildRankMenuHandler.initializeGuildRankMenu(event.getPlayer()), 1);
                 }
                 break;
             case CHAT:
@@ -66,31 +65,18 @@ public class NPCInteractions implements Listener {
                 break;
             case CUSTOM_SHOP:
                 if (event.getPlayer().hasPermission("elitemobs.shop.custom.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            CustomShopMenu.customShopInitializer(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
-
+                    npcScheduler.runDelayedAsync(() ->
+                        CustomShopMenu.customShopInitializer(event.getPlayer()), 1);
                 break;
             case PROCEDURALLY_GENERATED_SHOP:
                 if (event.getPlayer().hasPermission("elitemobs.shop.dynamic.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            ProceduralShopMenu.shopInitializer(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() ->
+                        ProceduralShopMenu.shopInitializer(event.getPlayer()), 1);
                 break;
             case QUEST_GIVER:
                 if (event.getPlayer().hasPermission("elitemobs.quest.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            QuestInteractionHandler.processDynamicQuests(event.getPlayer(), npcEntity);
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() ->
+                        QuestInteractionHandler.processDynamicQuests(event.getPlayer(), npcEntity), 1);
                 break;
             case CUSTOM_QUEST_GIVER:
                 QuestInteractionHandler.processNPCQuests(event.getPlayer(), npcEntity);
@@ -100,13 +86,10 @@ public class NPCInteractions implements Listener {
                 break;
             case SELL:
                 if (event.getPlayer().hasPermission("elitemobs.shop.sell.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            SellMenu sellMenu = new SellMenu();
-                            sellMenu.constructSellMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() -> {
+                        SellMenu sellMenu = new SellMenu();
+                        sellMenu.constructSellMenu(event.getPlayer());
+                    }, 1);
                 break;
             case TELEPORT_BACK:
                 if (event.getPlayer().hasPermission("elitemobs.back.npc")) {
@@ -120,45 +103,33 @@ public class NPCInteractions implements Listener {
                 break;
             case SCRAPPER:
                 if (event.getPlayer().hasPermission("elitemobs.scrap.npc")) {
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            ScrapperMenu scrapperMenu = new ScrapperMenu();
-                            scrapperMenu.constructScrapMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() -> {
+                        ScrapperMenu scrapperMenu = new ScrapperMenu();
+                        scrapperMenu.constructScrapMenu(event.getPlayer());
+                    }, 1);
                 }
                 break;
             case REPAIRMAN:
                 if (event.getPlayer().hasPermission("elitemobs.repair.npc")) {
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            RepairMenu repairMenu = new RepairMenu();
-                            repairMenu.constructRepairMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() -> {
+                        RepairMenu repairMenu = new RepairMenu();
+                        repairMenu.constructRepairMenu(event.getPlayer());
+                    }, 1);
                 }
                 break;
             case UNBINDER:
                 if (event.getPlayer().hasPermission("elitemobs.unbind.npc")) {
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            UnbindMenu unbindMenu = new UnbindMenu();
-                            unbindMenu.constructUnbinderMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() -> {
+                        UnbindMenu unbindMenu = new UnbindMenu();
+                        unbindMenu.constructUnbinderMenu(event.getPlayer());
+                    }, 1);
                 }
                 break;
             case ARENA_MASTER:
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        ArenaMenu arenaMenu = new ArenaMenu();
-                        arenaMenu.constructArenaMenu(event.getPlayer(), npcEntity.getNPCsConfigFields().getArenaFilename());
-                    }
-                }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                npcScheduler.runDelayedAsync(() -> {
+                    ArenaMenu arenaMenu = new ArenaMenu();
+                    arenaMenu.constructArenaMenu(event.getPlayer(), npcEntity.getNPCsConfigFields().getArenaFilename());
+                }, 1);
                 break;
             case NONE:
             default:
@@ -168,12 +139,8 @@ public class NPCInteractions implements Listener {
                     Logger.warn("Failed to run NPC command because none is configured for " + npcEntity.getNPCsConfigFields().getFilename());
                     return;
                 }
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        event.getPlayer().performCommand(npcEntity.getNPCsConfigFields().getCommand());
-                    }
-                }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                npcScheduler.runDelayedAsync(() ->
+                    event.getPlayer().performCommand(npcEntity.getNPCsConfigFields().getCommand()), 1);
                 break;
             case ENHANCER:
             case REFINER:
@@ -185,21 +152,13 @@ public class NPCInteractions implements Listener {
                 break;
             case ENCHANTER:
                 if (event.getPlayer().hasPermission("elitemobs.enchant.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            new ItemEnchantmentMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() ->
+                        new ItemEnchantmentMenu(event.getPlayer()), 1);
                 break;
             case SCROLL_APPLIER:
                 if (event.getPlayer().hasPermission("elitemobs.scroll.npc"))
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            new EliteScrollMenu(event.getPlayer());
-                        }
-                    }.runTaskLater(MetadataHandler.PLUGIN, 1);
+                    npcScheduler.runDelayedAsync(() ->
+                        new EliteScrollMenu(event.getPlayer()), 1);
                 break;
         }
 

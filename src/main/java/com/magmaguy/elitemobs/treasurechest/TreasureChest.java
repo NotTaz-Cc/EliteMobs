@@ -18,6 +18,7 @@ import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.Round;
 import lombok.Getter;
 import lombok.Setter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -29,7 +30,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -107,8 +107,10 @@ public class TreasureChest implements PersistentObject {
             long time = (restockTime - Instant.now().getEpochSecond()) * 20L;
             if (time < 0)
                 generateChest();
-            else
-                Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, this::generateChest, time);
+            else {
+                TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+                scheduler.runDelayedAsync(this::generateChest, time);
+            }
         }
     }
 
@@ -157,20 +159,18 @@ public class TreasureChest implements PersistentObject {
                     Logger.warn("Failed to save restock timers for treasure chest " + customTreasureChestConfigFields.getFilename());
                 }
 
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        customTreasureChestConfigFields.getRestockTimers().removeIf(restockTime -> restockTime.split(":")[0].equals(player.getUniqueId().toString()));
+                TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+                scheduler.runDelayedAsync(() -> {
+                    customTreasureChestConfigFields.getRestockTimers().removeIf(restockTime -> restockTime.split(":")[0].equals(player.getUniqueId().toString()));
 
-                        // Save the updated restockTimers to the config file after removal
-                        customTreasureChestConfigFields.getFileConfiguration().set("restockTimers", customTreasureChestConfigFields.getRestockTimers());
-                        try {
-                            customTreasureChestConfigFields.getFileConfiguration().save(customTreasureChestConfigFields.getFile());
-                        } catch (Exception ex) {
-                            Logger.warn("Failed to save restock timers for treasure chest " + customTreasureChestConfigFields.getFilename());
-                        }
+                    // Save the updated restockTimers to the config file after removal
+                    customTreasureChestConfigFields.getFileConfiguration().set("restockTimers", customTreasureChestConfigFields.getRestockTimers());
+                    try {
+                        customTreasureChestConfigFields.getFileConfiguration().save(customTreasureChestConfigFields.getFile());
+                    } catch (Exception ex) {
+                        Logger.warn("Failed to save restock timers for treasure chest " + customTreasureChestConfigFields.getFilename());
                     }
-                }.runTaskLater(MetadataHandler.PLUGIN, 20L * 60 * customTreasureChestConfigFields.getRestockTimer());
+                }, 20L * 60 * customTreasureChestConfigFields.getRestockTimer());
             }
         }
 
@@ -188,8 +188,10 @@ public class TreasureChest implements PersistentObject {
         restockTime = cooldownTime();
         customTreasureChestConfigFields.setRestockTime(location, restockTime);
 
-        if (!customTreasureChestConfigFields.isInstanced())
-            Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, this::generateChest, 20L * 60 * customTreasureChestConfigFields.getRestockTimer());
+        if (!customTreasureChestConfigFields.isInstanced()) {
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            scheduler.runDelayedAsync(this::generateChest, 20L * 60 * customTreasureChestConfigFields.getRestockTimer());
+        }
 
     }
 

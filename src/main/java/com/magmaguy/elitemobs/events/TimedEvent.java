@@ -12,11 +12,11 @@ import com.magmaguy.elitemobs.utils.EventCaller;
 import com.magmaguy.elitemobs.utils.WeightedProbability;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +27,7 @@ public class TimedEvent extends CustomEvent implements Listener {
     @Getter
     protected static List<TimedEvent> blueprintEvents = new ArrayList<>();
     protected static List<TimedEvent> timedEvents = new ArrayList<>();
-    private static BukkitTask eventPickerTask = null;
+    private static TaskWrapper eventPickerTask = null;
     //stores the time of the last global trigger
     @Getter
     private static double nextEventTrigger = System.currentTimeMillis() + 5D * 60D * 1000D;
@@ -67,21 +67,20 @@ public class TimedEvent extends CustomEvent implements Listener {
     }
 
     private static void startEventPicker() {
-        eventPickerTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (Bukkit.getServer().getOnlinePlayers().isEmpty()) return;
-                boolean validPlayer = false;
-                for (Player onlinePlayer : Bukkit.getServer().getOnlinePlayers())
-                    if (!GuildRank.isAtOrAboveGuildRank(onlinePlayer, 0, 0)) {
-                        validPlayer = true;
-                        break;
-                    }
-                if (!validPlayer) return;
-                if (System.currentTimeMillis() < nextEventTrigger) return;
-                pickEvent();
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 20L * 60L * 5L, 20L * 60L);
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        Runnable timerTask = () -> {
+            if (Bukkit.getServer().getOnlinePlayers().isEmpty()) return;
+            boolean validPlayer = false;
+            for (Player onlinePlayer : Bukkit.getServer().getOnlinePlayers())
+                if (!GuildRank.isAtOrAboveGuildRank(onlinePlayer, 0, 0)) {
+                    validPlayer = true;
+                    break;
+                }
+            if (!validPlayer) return;
+            if (System.currentTimeMillis() < nextEventTrigger) return;
+            pickEvent();
+        };
+        eventPickerTask = scheduler.runTimerAsync(timerTask, 20L * 60L * 5L, 20L * 60L);
     }
 
     private static void pickEvent() {
@@ -165,7 +164,8 @@ public class TimedEvent extends CustomEvent implements Listener {
                     silentRetry = true;
                 }
 
-                Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
+                TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+                scheduler.runDelayedAsync(() -> {
                     customSpawn.setSpawnLocation(null);
                     customSpawn.queueSpawn();
                 }, 1);

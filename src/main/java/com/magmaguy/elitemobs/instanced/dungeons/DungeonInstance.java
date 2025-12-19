@@ -27,7 +27,6 @@ import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
 import java.util.*;
@@ -79,12 +78,12 @@ public class DungeonInstance extends MatchInstance {
             this.dungeonObjectives.add(DungeonObjective.registerObjective(this, rawObjective));
         this.world = world;
         this.instancedWorldName = world.getName();
-        this.difficultyName = difficultyName;
-        setDifficulty(difficultyName);
-        addNewPlayer(player);
-        new InitializeEntitiesTask(this, contentPackagesConfigFields, world).runTaskLater(MetadataHandler.PLUGIN, 20 * 3L);
-        dungeonInstances.add(this);
-        super.permission = contentPackagesConfigFields.getPermission();
+         this.difficultyName = difficultyName;
+         setDifficulty(difficultyName);
+         addNewPlayer(player);
+         new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> new InitializeEntitiesTask(this, contentPackagesConfigFields, world).run(), 20 * 3L);
+         dungeonInstances.add(this);
+         super.permission = contentPackagesConfigFields.getPermission();
     }
 
     public static void setupInstancedDungeon(Player player, String instancedDungeonConfigFieldsString, String difficultyName) {
@@ -194,15 +193,15 @@ public class DungeonInstance extends MatchInstance {
     }
 
     @Override
-    public void endMatch() {
-        super.endMatch();
-        if (players.isEmpty()) {
-            removeInstance();
-            return;
-        }
-        announce(DungeonsConfig.getInstancedDungeonCompleteMessage());
-        new DestroyMatchTask().runTaskLater(MetadataHandler.PLUGIN, 2 * 60 * 20L);
-    }
+     public void endMatch() {
+         super.endMatch();
+         if (players.isEmpty()) {
+             removeInstance();
+             return;
+         }
+         announce(DungeonsConfig.getInstancedDungeonCompleteMessage());
+         new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> new DestroyMatchTask().run(), 2 * 60 * 20L);
+     }
 
     @Override
     public void destroyMatch() {
@@ -211,18 +210,18 @@ public class DungeonInstance extends MatchInstance {
     }
 
     public void removeInstance() {
-        participants.forEach(player -> player.sendMessage(DungeonsConfig.getInstancedDungeonClosingInstanceMessage()));
-        HashSet<Player> participants = new HashSet<>(this.participants);
-        participants.forEach(this::removeAnyKind);
-        instances.remove(this);
-        DungeonInstance dungeonInstance = this;
-        if (world == null) {
-            Logger.warn("Instanced dungeon's world was already unloaded before removing the entities in it! This shouldn't happen, but doesn't break anything.");
-            return;
-        }
-        world.getEntities().forEach(entity -> EntityTracker.unregister(entity, RemovalReason.WORLD_UNLOAD));
-        new RemoveInstanceTask(dungeonInstance).runTaskLater(MetadataHandler.PLUGIN, 20 * 30L);
-    }
+         participants.forEach(player -> player.sendMessage(DungeonsConfig.getInstancedDungeonClosingInstanceMessage()));
+         HashSet<Player> participants = new HashSet<>(this.participants);
+         participants.forEach(this::removeAnyKind);
+         instances.remove(this);
+         DungeonInstance dungeonInstance = this;
+         if (world == null) {
+             Logger.warn("Instanced dungeon's world was already unloaded before removing the entities in it! This shouldn't happen, but doesn't break anything.");
+             return;
+         }
+         world.getEntities().forEach(entity -> EntityTracker.unregister(entity, RemovalReason.WORLD_UNLOAD));
+         new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> new RemoveInstanceTask(dungeonInstance).run(), 20 * 30L);
+     }
 
     private void setDifficulty(String difficultyName) {
         if (difficultyName == null) return;
@@ -333,44 +332,41 @@ public class DungeonInstance extends MatchInstance {
         return location.getWorld().equals(startLocation.getWorld());
     }
 
-    private class InitializeEntitiesTask extends BukkitRunnable {
-        private final DungeonInstance dungeonInstance;
-        private final ContentPackagesConfigFields contentPackagesConfigFields;
-        private final World world;
+    private class InitializeEntitiesTask {
+         private final DungeonInstance dungeonInstance;
+         private final ContentPackagesConfigFields contentPackagesConfigFields;
+         private final World world;
 
-        public InitializeEntitiesTask(DungeonInstance dungeonInstance, ContentPackagesConfigFields contentPackagesConfigFields, World world) {
-            this.dungeonInstance = dungeonInstance;
-            this.contentPackagesConfigFields = contentPackagesConfigFields;
-            this.world = world;
-        }
+         public InitializeEntitiesTask(DungeonInstance dungeonInstance, ContentPackagesConfigFields contentPackagesConfigFields, World world) {
+             this.dungeonInstance = dungeonInstance;
+             this.contentPackagesConfigFields = contentPackagesConfigFields;
+             this.world = world;
+         }
 
-        @Override
-        public void run() {
-            instancedBossEntities = InstancedBossEntity.initializeInstancedBosses(contentPackagesConfigFields.getWorldName(), world, players.size(), dungeonInstance);
-            NPCEntity.initializeInstancedNPCs(contentPackagesConfigFields.getWorldName(), world, players.size(), dungeonInstance);
-            TreasureChest.initializeInstancedTreasureChests(contentPackagesConfigFields.getWorldName(), world);
-        }
-    }
+         public void run() {
+             instancedBossEntities = InstancedBossEntity.initializeInstancedBosses(contentPackagesConfigFields.getWorldName(), world, players.size(), dungeonInstance);
+             NPCEntity.initializeInstancedNPCs(contentPackagesConfigFields.getWorldName(), world, players.size(), dungeonInstance);
+             TreasureChest.initializeInstancedTreasureChests(contentPackagesConfigFields.getWorldName(), world);
+         }
+     }
 
-    private class DestroyMatchTask extends BukkitRunnable {
-        @Override
-        public void run() {
-            destroyMatch();
-        }
-    }
+     private class DestroyMatchTask {
+         public void run() {
+             destroyMatch();
+         }
+     }
 
-    private class RemoveInstanceTask extends BukkitRunnable {
-        private final DungeonInstance dungeonInstance;
+     private class RemoveInstanceTask {
+         private final DungeonInstance dungeonInstance;
 
-        public RemoveInstanceTask(DungeonInstance dungeonInstance) {
-            this.dungeonInstance = dungeonInstance;
-        }
+         public RemoveInstanceTask(DungeonInstance dungeonInstance) {
+             this.dungeonInstance = dungeonInstance;
+         }
 
-        @Override
-        public void run() {
-            new EventCaller(new InstancedDungeonRemoveEvent(dungeonInstance));
-            dungeonInstances.remove(dungeonInstance);
-            TemporaryWorldManager.permanentlyDeleteWorld(world);
-        }
-    }
+         public void run() {
+             new EventCaller(new InstancedDungeonRemoveEvent(dungeonInstance));
+             dungeonInstances.remove(dungeonInstance);
+             TemporaryWorldManager.permanentlyDeleteWorld(world);
+         }
+     }
 }

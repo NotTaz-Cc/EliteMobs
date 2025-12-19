@@ -3,12 +3,16 @@ package com.magmaguy.elitemobs.items;
 import com.magmaguy.elitemobs.MetadataHandler;
 import com.magmaguy.elitemobs.config.ItemSettingsConfig;
 import com.magmaguy.elitemobs.items.itemconstructor.ItemQualityColorizer;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Particle;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.ItemSpawnEvent;
-import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RareDropEffect implements Listener {
 
@@ -19,26 +23,25 @@ public class RareDropEffect implements Listener {
                 ItemQualityColorizer.getItemQuality(item.getItemStack()).equals(ItemQualityColorizer.ItemQuality.GOLD)))
             return;
 
-        new BukkitRunnable() {
-            int counter = 0;
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-            @Override
-            public void run() {
-
-                if (item == null || !item.isValid() || item.isDead()) {
-                    cancel();
-                    return;
-                }
-
-                item.getWorld().spawnParticle(Particle.PORTAL, item.getLocation(), 5, 0.01, 0.01, 0.01, 0.5);
-
-                counter += 20;
-                if (counter > 20 * 60 * 2)
-                    cancel();
+        Runnable timerTask = () -> {
+            if (item == null || !item.isValid() || item.isDead()) {
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
             }
 
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 20);
+            item.getWorld().spawnParticle(Particle.PORTAL, item.getLocation(), 5, 0.01, 0.01, 0.01, 0.5);
 
+            counter.addAndGet(20);
+            if (counter.get() > 20 * 60 * 2) {
+                if (taskRef.get() != null) taskRef.get().cancel();
+            }
+        };
+
+        taskRef.set(scheduler.runTimerAsync(timerTask, 0, 20));
     }
 
     @EventHandler

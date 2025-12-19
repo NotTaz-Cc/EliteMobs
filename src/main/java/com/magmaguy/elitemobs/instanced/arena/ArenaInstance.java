@@ -29,7 +29,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.*;
@@ -267,18 +266,15 @@ public class ArenaInstance extends MatchInstance {
                         if (!entity.isValid()) removeBoss(entity);
             }, 0L, 20L);
         } else {
-            // Fallback to old method
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (arenaState != ArenaState.ACTIVE) return;
-                    for (CustomBossEntity customBossEntity : (HashSet<CustomBossEntity>) customBosses.clone())
-                        if (!customBossEntity.exists()) removeBoss(customBossEntity);
-                    if (!nonEliteMobsEntities.isEmpty())
-                        for (Entity entity : (HashSet<Entity>) nonEliteMobsEntities.clone())
-                            if (!entity.isValid()) removeBoss(entity);
-                }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 0L, 20L);
+            // Fallback to old method using TaskScheduler
+            new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+                if (arenaState != ArenaState.ACTIVE) return;
+                for (CustomBossEntity customBossEntity : (HashSet<CustomBossEntity>) customBosses.clone())
+                    if (!customBossEntity.exists()) removeBoss(customBossEntity);
+                if (!nonEliteMobsEntities.isEmpty())
+                    for (Entity entity : (HashSet<Entity>) nonEliteMobsEntities.clone())
+                        if (!entity.isValid()) removeBoss(entity);
+            }, 0L, 20L);
         }
     }
 

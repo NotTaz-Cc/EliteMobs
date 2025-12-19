@@ -7,17 +7,20 @@ import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class GoldExplosion extends BossPower implements Listener {
 
@@ -42,27 +45,27 @@ public class GoldExplosion extends BossPower implements Listener {
 
         eliteEntity.getLivingEntity().setAI(false);
 
-        new BukkitRunnable() {
-            int counter = 0;
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-            @Override
-            public void run() {
-                if (!eliteEntity.isValid()) {
-                    cancel();
-                    return;
-                }
-
-                counter++;
-                if (MobCombatSettingsConfig.isEnableWarningVisualEffects())
-                    eliteEntity.getLivingEntity().getWorld().spawnParticle(Particle.SMOKE, eliteEntity.getLivingEntity().getLocation(), counter, 1, 1, 1, 0);
-
-                if (counter < 20 * 1.5) return;
-                cancel();
-                eliteEntity.getLivingEntity().setAI(true);
-                List<Item> goldNuggets = generateVisualItems(eliteEntity);
-                ProjectileDamage.doGoldNuggetDamage(goldNuggets, eliteEntity);
+        Runnable timerTask = () -> {
+            if (!eliteEntity.isValid()) {
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+
+            counter.incrementAndGet();
+            if (MobCombatSettingsConfig.isEnableWarningVisualEffects())
+                eliteEntity.getLivingEntity().getWorld().spawnParticle(Particle.SMOKE, eliteEntity.getLivingEntity().getLocation(), counter.get(), 1, 1, 1, 0);
+
+            if (counter.get() < 20 * 1.5) return;
+            if (taskRef.get() != null) taskRef.get().cancel();
+            eliteEntity.getLivingEntity().setAI(true);
+            List<Item> goldNuggets = generateVisualItems(eliteEntity);
+            ProjectileDamage.doGoldNuggetDamage(goldNuggets, eliteEntity);
+        };
+        taskRef.set(scheduler.runTimerAsync(timerTask, 0, 1));
 
     }
 

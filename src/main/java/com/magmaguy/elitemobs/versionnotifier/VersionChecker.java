@@ -7,11 +7,11 @@ import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.SpigotMessage;
 import lombok.Getter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -71,58 +71,57 @@ public class VersionChecker {
     }
 
     private static void checkPluginVersion() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                String currentVersion = MetadataHandler.PLUGIN.getDescription().getVersion();
-                boolean snapshot = false;
-                if (currentVersion.contains("SNAPSHOT")) {
-                    snapshot = true;
-                    currentVersion = currentVersion.split("-")[0];
-                }
-                String publicVersion = "";
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        scheduler.runAsync(() -> {
+            String currentVersion = MetadataHandler.PLUGIN.getDescription().getVersion();
+            boolean snapshot = false;
+            if (currentVersion.contains("SNAPSHOT")) {
+                snapshot = true;
+                currentVersion = currentVersion.split("-")[0];
+            }
+            String publicVersion = "";
 
-                try {
-                    publicVersion = VersionChecker.readStringFromURL("https://api.spigotmc.org/legacy/update.php?resource=40090");
-                    Logger.info("Latest public release is " + publicVersion);
-                    Logger.info("Your version is " + MetadataHandler.PLUGIN.getDescription().getVersion());
-                } catch (IOException e) {
-                    handleConnectionError("plugin version check", e);
-                    return;
-                }
+            try {
+                publicVersion = VersionChecker.readStringFromURL("https://api.spigotmc.org/legacy/update.php?resource=40090");
+                Logger.info("Latest public release is " + publicVersion);
+                Logger.info("Your version is " + MetadataHandler.PLUGIN.getDescription().getVersion());
+            } catch (IOException e) {
+                handleConnectionError("plugin version check", e);
+                return;
+            }
 
-                if (Double.parseDouble(currentVersion.split("\\.")[0]) < Double.parseDouble(publicVersion.split("\\.")[0])) {
+            if (Double.parseDouble(currentVersion.split("\\.")[0]) < Double.parseDouble(publicVersion.split("\\.")[0])) {
+                outOfDateHandler();
+                return;
+            }
+
+            if (Double.parseDouble(currentVersion.split("\\.")[0]) == Double.parseDouble(publicVersion.split("\\.")[0])) {
+
+                if (Double.parseDouble(currentVersion.split("\\.")[1]) < Double.parseDouble(publicVersion.split("\\.")[1])) {
                     outOfDateHandler();
                     return;
                 }
 
-                if (Double.parseDouble(currentVersion.split("\\.")[0]) == Double.parseDouble(publicVersion.split("\\.")[0])) {
-
-                    if (Double.parseDouble(currentVersion.split("\\.")[1]) < Double.parseDouble(publicVersion.split("\\.")[1])) {
+                if (Double.parseDouble(currentVersion.split("\\.")[1]) == Double.parseDouble(publicVersion.split("\\.")[1])) {
+                    if (Double.parseDouble(currentVersion.split("\\.")[2]) < Double.parseDouble(publicVersion.split("\\.")[2])) {
                         outOfDateHandler();
                         return;
                     }
-
-                    if (Double.parseDouble(currentVersion.split("\\.")[1]) == Double.parseDouble(publicVersion.split("\\.")[1])) {
-                        if (Double.parseDouble(currentVersion.split("\\.")[2]) < Double.parseDouble(publicVersion.split("\\.")[2])) {
-                            outOfDateHandler();
-                            return;
-                        }
-                    }
                 }
-
-                if (!snapshot)
-                    Logger.info("You are running the latest version!");
-                else
-                    Logger.info("You are running a snapshot version! You can check for updates in the #releases channel on the EliteMobs Discord!");
-
-                pluginIsUpToDate = true;
             }
-        }.runTaskAsynchronously(MetadataHandler.PLUGIN);
+
+            if (!snapshot)
+                Logger.info("You are running the latest version!");
+            else
+                Logger.info("You are running a snapshot version! You can check for updates in the #releases channel on the EliteMobs Discord!");
+
+            pluginIsUpToDate = true;
+        });
     }
 
     private static void checkContentVersion() {
-        Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        scheduler.runAsync(() -> {
             try {
                 String remoteVersions = readStringFromURL("https://www.magmaguy.com/api/elitemobs_content");
                 connectionFailed = false; // Reset the flag if successful
@@ -210,8 +209,8 @@ public class VersionChecker {
                         " seconds (Attempt " + connectionRetryCount + "/" + MAX_RETRY_ATTEMPTS + ")");
 
                 // Schedule a retry after delay
-                Bukkit.getScheduler().runTaskLaterAsynchronously(MetadataHandler.PLUGIN,
-                        () -> checkContentVersion(), 20L * RETRY_DELAY_SECONDS);
+                TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+                scheduler.runDelayedAsync(VersionChecker::checkContentVersion, 20L * RETRY_DELAY_SECONDS);
             } else {
                 Logger.warn("Failed to connect for " + checkType + " after " + MAX_RETRY_ATTEMPTS +
                         " attempts. Will continue without version checking. Error: " + e.getMessage());
@@ -249,75 +248,73 @@ public class VersionChecker {
 
             if (!event.getPlayer().hasPermission("elitemobs.versionnotification")) return;
 
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (!event.getPlayer().isOnline()) return;
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            scheduler.runDelayedAsync(() -> {
+                if (!event.getPlayer().isOnline()) return;
 
-                    if (connectionFailed && event.getPlayer().hasPermission("elitemobs.admin")) {
-                        event.getPlayer().sendMessage(ChatColorConverter.convert("&8[EliteMobs] &eWarning: Could not connect to update servers. " +
-                                "Version checking is currently unavailable. Check your internet connection or try again later."));
-                    }
-
-                    if (!pluginIsUpToDate)
-                        event.getPlayer().sendMessage(ChatColorConverter.convert("&cYour version of EliteMobs is outdated." +
-                                " &aYou can download the latest version from &3&n&ohttps://nightbreak.io/plugin/elitemobs/"));
-
-                    if (!outdatedPackages.isEmpty()) {
-                        Logger.sendSimpleMessage(event.getPlayer(), "&8&m-----------------------------------------------------");
-                        Logger.sendMessage(event.getPlayer(), "&cThe following dungeons are outdated:");
-                        for (EMPackage emPackage : outdatedPackages) {
-                            String name = emPackage.getContentPackagesConfigFields().getName();
-                            String link = emPackage.getContentPackagesConfigFields().getDownloadLink();
-
-                            if (link != null && !link.isEmpty()) {
-                                // only send the hover-link if we actually have a URL
-                                event.getPlayer().spigot().sendMessage(
-                                        SpigotMessage.hoverLinkMessage(
-                                                "&c- " + name,
-                                                ChatColorConverter.convert("&9Click to go to download link!"),
-                                                link
-                                        )
-                                );
-                            } else {
-                                // fall back to plain text if link is missing
-                                event.getPlayer().sendMessage(
-                                        ChatColorConverter.convert("&c- " + name + " &7(no download link available)")
-                                );
-                            }
-                        }
-
-                        event.getPlayer().spigot().sendMessage(
-                                SpigotMessage.simpleMessage("&8[EliteMobs]&f You can download the update at "),
-                                SpigotMessage.hoverLinkMessage(
-                                        "&9&nhttps://nightbreak.io/plugin/elitemobs/#content",
-                                        "Click for Nightbreak link",
-                                        "https://nightbreak.io/plugin/elitemobs/#content"
-                                ),
-                                SpigotMessage.simpleMessage(" !")
-                        );
-                        event.getPlayer().spigot().sendMessage(
-                                SpigotMessage.simpleMessage("&2Updating is quick & easy! "),
-                                SpigotMessage.hoverLinkMessage(
-                                        "&9&nClick here",
-                                        "Click for wiki link",
-                                        "https://nightbreak.io/plugin/elitemobs/#setup"
-                                ),
-                                SpigotMessage.simpleMessage(" &2for info on how to install updates and "),
-                                SpigotMessage.hoverLinkMessage(
-                                        "&9&nhere",
-                                        "Discord support link",
-                                        DiscordLinks.mainLink
-                                ),
-                                SpigotMessage.simpleMessage(" &2for the support room.")
-                        );
-                        Logger.sendSimpleMessage(event.getPlayer(), "&8&m-----------------------------------------------------");
-                    }
-                    if (SHA1Updated) {
-                        event.getPlayer().sendMessage(ChatColorConverter.convert("&8[EliteMobs] &cThe EliteMobs resource pack has updated! This means that the current resource pack will not fully work until you restart your server. You only need to restart once!"));
-                    }
+                if (connectionFailed && event.getPlayer().hasPermission("elitemobs.admin")) {
+                    event.getPlayer().sendMessage(ChatColorConverter.convert("&8[EliteMobs] &eWarning: Could not connect to update servers. " +
+                            "Version checking is currently unavailable. Check your internet connection or try again later."));
                 }
-            }.runTaskLater(MetadataHandler.PLUGIN, 20L * 3);
+
+                if (!pluginIsUpToDate)
+                    event.getPlayer().sendMessage(ChatColorConverter.convert("&cYour version of EliteMobs is outdated." +
+                            " &aYou can download the latest version from &3&n&ohttps://nightbreak.io/plugin/elitemobs/"));
+
+                if (!outdatedPackages.isEmpty()) {
+                    Logger.sendSimpleMessage(event.getPlayer(), "&8&m-----------------------------------------------------");
+                    Logger.sendMessage(event.getPlayer(), "&cThe following dungeons are outdated:");
+                    for (EMPackage emPackage : outdatedPackages) {
+                        String name = emPackage.getContentPackagesConfigFields().getName();
+                        String link = emPackage.getContentPackagesConfigFields().getDownloadLink();
+
+                        if (link != null && !link.isEmpty()) {
+                            // only send the hover-link if we actually have a URL
+                            event.getPlayer().spigot().sendMessage(
+                                    SpigotMessage.hoverLinkMessage(
+                                            "&c- " + name,
+                                            ChatColorConverter.convert("&9Click to go to download link!"),
+                                            link
+                                    )
+                            );
+                        } else {
+                            // fall back to plain text if link is missing
+                            event.getPlayer().sendMessage(
+                                    ChatColorConverter.convert("&c- " + name + " &7(no download link available)")
+                            );
+                        }
+                    }
+
+                    event.getPlayer().spigot().sendMessage(
+                            SpigotMessage.simpleMessage("&8[EliteMobs]&f You can download the update at "),
+                            SpigotMessage.hoverLinkMessage(
+                                    "&9&nhttps://nightbreak.io/plugin/elitemobs/#content",
+                                    "Click for Nightbreak link",
+                                    "https://nightbreak.io/plugin/elitemobs/#content"
+                            ),
+                            SpigotMessage.simpleMessage(" !")
+                    );
+                    event.getPlayer().spigot().sendMessage(
+                            SpigotMessage.simpleMessage("&2Updating is quick & easy! "),
+                            SpigotMessage.hoverLinkMessage(
+                                    "&9&nClick here",
+                                    "Click for wiki link",
+                                    "https://nightbreak.io/plugin/elitemobs/#setup"
+                            ),
+                            SpigotMessage.simpleMessage(" &2for info on how to install updates and "),
+                            SpigotMessage.hoverLinkMessage(
+                                    "&9&nhere",
+                                    "Discord support link",
+                                    DiscordLinks.mainLink
+                            ),
+                            SpigotMessage.simpleMessage(" &2for the support room.")
+                    );
+                    Logger.sendSimpleMessage(event.getPlayer(), "&8&m-----------------------------------------------------");
+                }
+                if (SHA1Updated) {
+                    event.getPlayer().sendMessage(ChatColorConverter.convert("&8[EliteMobs] &cThe EliteMobs resource pack has updated! This means that the current resource pack will not fully work until you restart your server. You only need to restart once!"));
+                }
+            }, 20L * 3);
         }
     }
 }

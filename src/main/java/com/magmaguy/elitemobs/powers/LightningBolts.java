@@ -6,14 +6,18 @@ import com.magmaguy.elitemobs.collateralminecraftchanges.LightningSpawnBypass;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 public class LightningBolts extends BossPower implements Listener {
@@ -38,31 +42,28 @@ public class LightningBolts extends BossPower implements Listener {
                 }
             }
         }
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (eliteEntity != null && eliteEntity.getLivingEntity() != null)
-                    eliteEntity.getLivingEntity().setAI(true);
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, 4L * 20);
-    }
+        new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> {
+            if (eliteEntity != null && eliteEntity.getLivingEntity() != null)
+                eliteEntity.getLivingEntity().setAI(true);
+        }, 4L * 20);
+        }
 
-    public static void lightningTask(Location location, int counter) {
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                if (counter > 20 * 2) {
-                    LightningSpawnBypass.bypass();
-                    location.getWorld().strikeLightning(location);
-                    cancel();
-                    return;
-                }
-                location.getWorld().spawnParticle(Particle.CRIT, location, 10, 0.5, 1.5, 0.5, 0.3);
+    public static void lightningTask(Location location, int counterDelay) {
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        Runnable timerTask = () -> {
+            counter.incrementAndGet();
+            if (counter.get() > 20 * 2) {
+                LightningSpawnBypass.bypass();
+                location.getWorld().strikeLightning(location);
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, counter * 5L, 1);
+            location.getWorld().spawnParticle(Particle.CRIT, location, 10, 0.5, 1.5, 0.5, 0.3);
+        };
+        taskRef.set(scheduler.runTimerAsync(timerTask, counterDelay * 5L, 1));
 
     }
 

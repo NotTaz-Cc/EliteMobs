@@ -13,6 +13,8 @@ import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.Round;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
@@ -27,7 +29,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -35,6 +36,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ItemLootShower implements Listener {
 
@@ -58,22 +61,23 @@ public class ItemLootShower implements Listener {
 
         if (Math.abs(mobLevel - ElitePlayerInventory.playerInventories.get(player.getUniqueId()).getFullPlayerTier(false))
                 > ItemSettingsConfig.getLootLevelDifferenceLockout()) {
-            new BukkitRunnable() {
-                int counter = 0;
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            AtomicInteger counter = new AtomicInteger(0);
+            AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-                @Override
-                public void run() {
-                    counter++;
-                    if (!player.isValid() || counter > 20 * 5) {
-                        cancel();
-                        return;
-                    }
-                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(
-                            ChatColorConverter.convert(ItemSettingsConfig.getLevelRangeTooDifferent())
-                                    .replace("$playerLevel", ElitePlayerInventory.playerInventories.get(player.getUniqueId()).getFullPlayerTier(false) + "")
-                                    .replace("$bossLevel", (int) mobLevel + "")));
+            Runnable timerTask = () -> {
+                counter.incrementAndGet();
+                if (!player.isValid() || counter.get() > 20 * 5) {
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                    return;
                 }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(
+                        ChatColorConverter.convert(ItemSettingsConfig.getLevelRangeTooDifferent())
+                                .replace("$playerLevel", ElitePlayerInventory.playerInventories.get(player.getUniqueId()).getFullPlayerTier(false) + "")
+                                .replace("$bossLevel", (int) mobLevel + "")));
+            };
+
+            taskRef.set(scheduler.runTimerAsync(timerTask, 0, 1));
             return;
         }
         if (ItemSettingsConfig.isPutLootDirectlyIntoPlayerInventory())
@@ -91,41 +95,38 @@ public class ItemLootShower implements Listener {
         UUID playerUUID = player.getUniqueId();
         if (playerCurrencyPickup.containsKey(playerUUID)) return;
 
-        new BukkitRunnable() {
-            double oldAmount = 0;
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicReference<Double> oldAmount = new AtomicReference<>(0.0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-            @Override
-            public void run() {
-
-                if (!playerCurrencyPickup.containsKey(playerUUID)) {
-                    playerCurrencyPickup.put(playerUUID, 0.0);
-                    return;
-                }
-
-                if (oldAmount != playerCurrencyPickup.get(playerUUID)) {
-                    oldAmount = playerCurrencyPickup.get(playerUUID);
-                    return;
-                }
-
-                if (!player.isOnline()) {
-                    playerCurrencyPickup.remove(playerUUID);
-                    cancel();
-                    return;
-                }
-
-                player.sendMessage(ChatColorConverter.convert(EconomySettingsConfig.getChatCurrencyShowerMessage()
-                        .replace("$currency_name", EconomySettingsConfig.getCurrencyName())
-                        .replace("$amount", playerCurrencyPickup.get(playerUUID) + "")));
-
-                playerCurrencyPickup.remove(playerUUID);
-                sendAdventurersGuildNotification(player);
-
-                cancel();
-
+        Runnable timerTask = () -> {
+            if (!playerCurrencyPickup.containsKey(playerUUID)) {
+                playerCurrencyPickup.put(playerUUID, 0.0);
+                return;
             }
 
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 40);
+            if (!oldAmount.get().equals(playerCurrencyPickup.get(playerUUID))) {
+                oldAmount.set(playerCurrencyPickup.get(playerUUID));
+                return;
+            }
 
+            if (!player.isOnline()) {
+                playerCurrencyPickup.remove(playerUUID);
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
+            }
+
+            player.sendMessage(ChatColorConverter.convert(EconomySettingsConfig.getChatCurrencyShowerMessage()
+                    .replace("$currency_name", EconomySettingsConfig.getCurrencyName())
+                    .replace("$amount", playerCurrencyPickup.get(playerUUID) + "")));
+
+            playerCurrencyPickup.remove(playerUUID);
+            sendAdventurersGuildNotification(player);
+
+            if (taskRef.get() != null) taskRef.get().cancel();
+        };
+
+        taskRef.set(scheduler.runTimerAsync(timerTask, 0, 40));
     }
 
     private static void sendAdventurersGuildNotification(Player player) {
@@ -134,69 +135,69 @@ public class ItemLootShower implements Listener {
     }
 
     private void addIndirectly(Location location, int currencyAmount2) {
-        new BukkitRunnable() {
-            int currencyAmount = currencyAmount2;
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        AtomicInteger currencyAmount = new AtomicInteger(currencyAmount2);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-            @Override
-            public void run() {
+        Runnable timerTask = () -> {
+            if (currencyAmount.get() <= 0) {
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
+            }
 
-                if (currencyAmount <= 0) {
-                    cancel();
+            if (currencyAmount.get() >= 1000) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropOneThousand(location);
+                    currencyAmount.addAndGet(-1000);
                     return;
                 }
+            }
 
-                if (currencyAmount >= 1000) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropOneThousand(location);
-                        currencyAmount -= 1000;
-                        return;
-                    }
-                }
-
-                if (currencyAmount >= 500) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropFiveHundred(location);
-                        currencyAmount -= 500;
-                        return;
-                    }
-                }
-
-                if (currencyAmount >= 100) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropOneHundred(location);
-                        currencyAmount -= 100;
-                    }
-
-                } else if (currencyAmount >= 50) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropFifty(location);
-                        currencyAmount -= 50;
-                    }
-
-                } else if (currencyAmount >= 20) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropTwenty(location);
-                        currencyAmount -= 20;
-                    }
-
-                } else if (currencyAmount >= 10) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropTen(location);
-                        currencyAmount -= 10;
-                    }
-
-                } else if (currencyAmount >= 5) {
-                    if (ThreadLocalRandom.current().nextDouble() < 0.65) {
-                        dropFive(location);
-                        currencyAmount -= 5;
-                    }
-
-                } else {
-                    dropOne(location);
-                    currencyAmount--;
+            if (currencyAmount.get() >= 500) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropFiveHundred(location);
+                    currencyAmount.addAndGet(-500);
+                    return;
                 }
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 2, 2);
+
+            if (currencyAmount.get() >= 100) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropOneHundred(location);
+                    currencyAmount.addAndGet(-100);
+                }
+
+            } else if (currencyAmount.get() >= 50) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropFifty(location);
+                    currencyAmount.addAndGet(-50);
+                }
+
+            } else if (currencyAmount.get() >= 20) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropTwenty(location);
+                    currencyAmount.addAndGet(-20);
+                }
+
+            } else if (currencyAmount.get() >= 10) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropTen(location);
+                    currencyAmount.addAndGet(-10);
+                }
+
+            } else if (currencyAmount.get() >= 5) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.65) {
+                    dropFive(location);
+                    currencyAmount.addAndGet(-5);
+                }
+
+            } else {
+                dropOne(location);
+                currencyAmount.decrementAndGet();
+            }
+        };
+
+        taskRef.set(scheduler.runTimerAsync(timerTask, 2, 2));
     }
 
     private int getCurrencyAmount(double eliteMobTier) {
@@ -413,61 +414,61 @@ public class ItemLootShower implements Listener {
             coinValues.put(item.getUniqueId(), this);
             pickupable = false;
             item.setGravity(false);
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (coinValues.containsKey(item.getUniqueId())) {
-                        if (Bukkit.getEntity(item.getUniqueId()) != null)
-                            Bukkit.getEntity(item.getUniqueId()).remove();
-                        coinValues.remove(item.getUniqueId());
-                    }
+            
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            
+            // Task to remove coin after 5 minutes
+            scheduler.runDelayedAsync(() -> {
+                if (coinValues.containsKey(item.getUniqueId())) {
+                    if (Bukkit.getEntity(item.getUniqueId()) != null)
+                        Bukkit.getEntity(item.getUniqueId()).remove();
+                    coinValues.remove(item.getUniqueId());
                 }
-            }.runTaskLater(MetadataHandler.PLUGIN, 20 * 60 * 5);
+            }, 20 * 60 * 5);
 
-            new BukkitRunnable() {
-                int counter = 0;
+            // Task to move coin towards player
+            AtomicInteger counter = new AtomicInteger(0);
+            AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-                @Override
-                public void run() {
-
-                    if (!item.isValid() ||
-                            !player.isValid() ||
-                            !player.getWorld().equals(item.getWorld()) ||
-                            counter > 20 * 4 ||
-                            item.getLocation().distanceSquared(player.getLocation()) > 900) {
-                        cancel();
-                        pickupable = true;
-                        item.setGravity(true);
-                        return;
-                    }
-
-                    item.setVelocity(player.getLocation().clone().subtract(item.getLocation()).toVector().normalize().multiply(0.2));
-
-                    if (player.getLocation().distanceSquared(item.getLocation()) <= 1) {
-                        item.remove();
-                        EconomyHandler.addCurrency(player.getUniqueId(), value);
-                        sendCurrencyNotification(player);
-
-                        //cache for counting how much coin they're getting over a short amount of time
-                        UUID coinPlayerUUID = player.getUniqueId();
-                        if (playerCurrencyPickup.containsKey(coinPlayerUUID))
-                            playerCurrencyPickup.put(coinPlayerUUID, playerCurrencyPickup.get(coinPlayerUUID) + value);
-                        else
-                            playerCurrencyPickup.put(coinPlayerUUID, value);
-
-                        player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                                TextComponent.fromLegacyText(
-                                        ChatColorConverter.convert(EconomySettingsConfig.getActionBarCurrencyShowerMessage()
-                                                .replace("$currency_name", EconomySettingsConfig.getCurrencyName())
-                                                .replace("$amount", Round.twoDecimalPlaces(playerCurrencyPickup.get(coinPlayerUUID)) + ""))));
-                        coinValues.remove(item.getUniqueId());
-                        cancel();
-                        return;
-                    }
-
-                    counter++;
+            Runnable timerTask = () -> {
+                if (!item.isValid() ||
+                        !player.isValid() ||
+                        !player.getWorld().equals(item.getWorld()) ||
+                        counter.get() > 20 * 4 ||
+                        item.getLocation().distanceSquared(player.getLocation()) > 900) {
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                    pickupable = true;
+                    item.setGravity(true);
+                    return;
                 }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 1, 1);
+
+                item.setVelocity(player.getLocation().clone().subtract(item.getLocation()).toVector().normalize().multiply(0.2));
+
+                if (player.getLocation().distanceSquared(item.getLocation()) <= 1) {
+                    item.remove();
+                    EconomyHandler.addCurrency(player.getUniqueId(), value);
+                    sendCurrencyNotification(player);
+
+                    UUID coinPlayerUUID = player.getUniqueId();
+                    if (playerCurrencyPickup.containsKey(coinPlayerUUID))
+                        playerCurrencyPickup.put(coinPlayerUUID, playerCurrencyPickup.get(coinPlayerUUID) + value);
+                    else
+                        playerCurrencyPickup.put(coinPlayerUUID, value);
+
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                            TextComponent.fromLegacyText(
+                                    ChatColorConverter.convert(EconomySettingsConfig.getActionBarCurrencyShowerMessage()
+                                            .replace("$currency_name", EconomySettingsConfig.getCurrencyName())
+                                            .replace("$amount", Round.twoDecimalPlaces(playerCurrencyPickup.get(coinPlayerUUID)) + ""))));
+                    coinValues.remove(item.getUniqueId());
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                    return;
+                }
+
+                counter.incrementAndGet();
+            };
+
+            taskRef.set(scheduler.runTimerAsync(timerTask, 1, 1));
         }
     }
 

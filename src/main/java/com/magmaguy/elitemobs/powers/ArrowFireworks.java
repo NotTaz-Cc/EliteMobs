@@ -6,6 +6,8 @@ import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.MinorPower;
 import com.magmaguy.elitemobs.utils.NonSolidBlockTypes;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Arrow;
@@ -14,10 +16,11 @@ import org.bukkit.entity.Monster;
 import org.bukkit.entity.SpectralArrow;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ArrowFireworks extends MinorPower implements Listener {
 
@@ -51,38 +54,36 @@ public class ArrowFireworks extends MinorPower implements Listener {
             rocketArrow.setGravity(false);
             rocketArrow.setGlowing(true);
 
-            new BukkitRunnable() {
-                int counter = 0;
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            AtomicInteger counter = new AtomicInteger(0);
+            AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
 
-                @Override
-                public void run() {
-                    if (!rocketArrow.isValid() || !eliteEntity.isValid()) {
-                        cancel();
-                        return;
-                    }
-
-                    if (counter < 20 * 1.5) {
-                        rocketArrow.getWorld().spawnParticle(Particle.CRIT, rocketArrow.getLocation(), 1);
-                    } else {
-
-                        for (int i = 0; i < 30; i++) {
-                            Arrow fireworkArrow = (Arrow) rocketArrow.getWorld().spawnEntity(rocketArrow.getLocation(), EntityType.ARROW);
-                            Vector randomizedDirection = new Vector((ThreadLocalRandom.current().nextDouble() - 0.5) * 2, (ThreadLocalRandom.current().nextDouble() - 0.5) * 2, (ThreadLocalRandom.current().nextDouble() - 0.5) * 2);
-                            fireworkArrow.setVelocity(randomizedDirection);
-                            fireworkArrow.setShooter(eliteEntity.getLivingEntity());
-                            fireworkArrow.setGlowing(true);
-                        }
-
-                        rocketArrow.remove();
-
-                        cancel();
-                    }
-
-                    counter++;
-
-
+            Runnable timerTask = () -> {
+                if (!rocketArrow.isValid() || !eliteEntity.isValid()) {
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                    return;
                 }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+
+                if (counter.get() < 20 * 1.5) {
+                    rocketArrow.getWorld().spawnParticle(Particle.CRIT, rocketArrow.getLocation(), 1);
+                } else {
+
+                    for (int i = 0; i < 30; i++) {
+                        Arrow fireworkArrow = (Arrow) rocketArrow.getWorld().spawnEntity(rocketArrow.getLocation(), EntityType.ARROW);
+                        Vector randomizedDirection = new Vector((ThreadLocalRandom.current().nextDouble() - 0.5) * 2, (ThreadLocalRandom.current().nextDouble() - 0.5) * 2, (ThreadLocalRandom.current().nextDouble() - 0.5) * 2);
+                        fireworkArrow.setVelocity(randomizedDirection);
+                        fireworkArrow.setShooter(eliteEntity.getLivingEntity());
+                        fireworkArrow.setGlowing(true);
+                    }
+
+                    rocketArrow.remove();
+
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                }
+
+                counter.incrementAndGet();
+            };
+            taskRef.set(scheduler.runTimerAsync(timerTask, 0, 1));
 
         }
 

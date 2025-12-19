@@ -13,6 +13,8 @@ import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Round;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.*;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
@@ -23,8 +25,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
@@ -77,7 +77,7 @@ public class BossHealthDisplay implements Listener {
     private static final List<PopupData> activePopups = Collections.synchronizedList(new ArrayList<>());
 
     // Master update task
-    private static BukkitTask masterUpdateTask = null;
+    private static TaskWrapper masterUpdateTask = null;
 
     /**
      * Starts the master update task that handles all display updates
@@ -85,49 +85,48 @@ public class BossHealthDisplay implements Listener {
     public static void startMasterUpdateTask() {
         if (masterUpdateTask != null) return;
 
-        masterUpdateTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                // Update health displays
-                Iterator<Map.Entry<UUID, HealthDisplayData>> iterator = activeDisplays.entrySet().iterator();
-                while (iterator.hasNext()) {
-                    Map.Entry<UUID, HealthDisplayData> entry = iterator.next();
-                    HealthDisplayData data = entry.getValue();
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        Runnable timerTask = () -> {
+            // Update health displays
+            Iterator<Map.Entry<UUID, HealthDisplayData>> iterator = activeDisplays.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<UUID, HealthDisplayData> entry = iterator.next();
+                HealthDisplayData data = entry.getValue();
 
-                    // Check if elite is still valid
-                    if (!data.isValid()) {
-                        data.cleanup();
-                        iterator.remove();
-                        continue;
-                    }
-
-                    // Check combat timeout
-                    if (data.checkCombatTimeout()) {
-                        data.cleanup();
-                        iterator.remove();
-                        continue;
-                    }
-
-                    // Update display positions
-                    data.updatePositions();
-
-                    // Update boss bar for nearby players (high multiplier bosses)
-                    data.updateProximityBossBar();
+                // Check if elite is still valid
+                if (!data.isValid()) {
+                    data.cleanup();
+                    iterator.remove();
+                    continue;
                 }
 
-                // Update popup animations
-                synchronized (activePopups) {
-                    Iterator<PopupData> popupIterator = activePopups.iterator();
-                    while (popupIterator.hasNext()) {
-                        PopupData popup = popupIterator.next();
-                        if (!popup.update()) {
-                            popup.cleanup();
-                            popupIterator.remove();
-                        }
+                // Check combat timeout
+                if (data.checkCombatTimeout()) {
+                    data.cleanup();
+                    iterator.remove();
+                    continue;
+                }
+
+                // Update display positions
+                data.updatePositions();
+
+                // Update boss bar for nearby players (high multiplier bosses)
+                data.updateProximityBossBar();
+            }
+
+            // Update popup animations
+            synchronized (activePopups) {
+                Iterator<PopupData> popupIterator = activePopups.iterator();
+                while (popupIterator.hasNext()) {
+                    PopupData popup = popupIterator.next();
+                    if (!popup.update()) {
+                        popup.cleanup();
+                        popupIterator.remove();
                     }
                 }
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1); // Run every tick for smooth animations
+        };
+        masterUpdateTask = scheduler.runTimerAsync(timerTask, 0, 1); // Run every tick for smooth animations
     }
 
     /**
@@ -273,25 +272,25 @@ public class BossHealthDisplay implements Listener {
             });
             EntityTracker.registerVisualEffects(armorStand);
 
-            new BukkitRunnable() {
-                int counter = 0;
-
-                @Override
-                public void run() {
-                    if (counter > 20 || !eliteEntity.isValid() || !player.isValid() ||
-                            !eliteEntity.getLocation().getWorld().equals(player.getWorld())) {
-                        EntityTracker.unregister(armorStand, RemovalReason.EFFECT_TIMEOUT);
-                        cancel();
-                        return;
-                    }
-                    try {
-                        armorStand.teleport(getResistLocation(player, eliteEntity));
-                    } catch (Exception e) {
-                        // Sometimes x is not finite, doesn't matter
-                    }
-                    counter++;
+            TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+            java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
+            java.util.concurrent.atomic.AtomicReference<TaskWrapper> taskRef = new java.util.concurrent.atomic.AtomicReference<>();
+            
+            Runnable timerTask = () -> {
+                if (counter.get() > 20 || !eliteEntity.isValid() || !player.isValid() ||
+                        !eliteEntity.getLocation().getWorld().equals(player.getWorld())) {
+                    EntityTracker.unregister(armorStand, RemovalReason.EFFECT_TIMEOUT);
+                    if (taskRef.get() != null) taskRef.get().cancel();
+                    return;
                 }
-            }.runTaskTimer(MetadataHandler.PLUGIN, 1, 1);
+                try {
+                    armorStand.teleport(getResistLocation(player, eliteEntity));
+                } catch (Exception e) {
+                    // Sometimes x is not finite, doesn't matter
+                }
+                counter.incrementAndGet();
+            };
+            taskRef.set(scheduler.runTimerAsync(timerTask, 1, 1));
         } catch (Exception e) {
             // Silently fail
         }
@@ -317,27 +316,27 @@ public class BossHealthDisplay implements Listener {
 
         if (textDisplays[0] == null || textDisplays[1] == null) return;
 
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                if (counter > 10 || !eliteEntity.isValid() || !player.isValid() ||
-                        !eliteEntity.getLocation().getWorld().equals(player.getWorld())) {
-                    if (textDisplays[0] != null) EntityTracker.unregister(textDisplays[0], RemovalReason.EFFECT_TIMEOUT);
-                    if (textDisplays[1] != null) EntityTracker.unregister(textDisplays[1], RemovalReason.EFFECT_TIMEOUT);
-                    cancel();
-                    return;
-                }
-                for (TextDisplay display : textDisplays) {
-                    if (display != null && display.isValid()) {
-                        display.teleport(display.getLocation().add(eliteEntity.getLocation()
-                                .subtract(display.getLocation()).toVector().normalize().multiply(.4)));
-                    }
-                }
-                counter++;
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicReference<TaskWrapper> taskRef = new java.util.concurrent.atomic.AtomicReference<>();
+        
+        Runnable timerTask = () -> {
+            if (counter.get() > 10 || !eliteEntity.isValid() || !player.isValid() ||
+                    !eliteEntity.getLocation().getWorld().equals(player.getWorld())) {
+                if (textDisplays[0] != null) EntityTracker.unregister(textDisplays[0], RemovalReason.EFFECT_TIMEOUT);
+                if (textDisplays[1] != null) EntityTracker.unregister(textDisplays[1], RemovalReason.EFFECT_TIMEOUT);
+                if (taskRef.get() != null) taskRef.get().cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 1, 1);
+            for (TextDisplay display : textDisplays) {
+                if (display != null && display.isValid()) {
+                    display.teleport(display.getLocation().add(eliteEntity.getLocation()
+                            .subtract(display.getLocation()).toVector().normalize().multiply(.4)));
+                }
+            }
+            counter.incrementAndGet();
+        };
+        taskRef.set(scheduler.runTimerAsync(timerTask, 1, 1));
     }
 
     private TextDisplay generateWeakTextDisplay(Player player, EliteEntity eliteEntity, int offset) {
