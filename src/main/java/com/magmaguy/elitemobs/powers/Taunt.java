@@ -11,12 +11,12 @@ import com.magmaguy.elitemobs.entitytracker.EntityTracker;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.MinorPower;
 import com.magmaguy.magmacore.util.ChatColorConverter;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -38,22 +38,16 @@ public class Taunt extends MinorPower implements Listener {
 
     //Also used by the custom bosses
     public static void nameTagProcessor(EliteEntity eliteEntity, Entity entity, List<String> list) {
-        if (entity == null || !eliteEntity.isValid()) return;
-        int randomizedKey = ThreadLocalRandom.current().nextInt(list.size());
-        String tempName = list.get(randomizedKey);
-        entity.setCustomName(ChatColorConverter.convert(tempName));
-        new BukkitRunnable() {
-
-            @Override
-            public void run() {
-                if (!entity.isValid())
-                    return;
-                entity.setCustomName(eliteEntity.getName());
-            }
-
-
-        }.runTaskLater(MetadataHandler.PLUGIN, 4 * 20L);
-    }
+         if (entity == null || !eliteEntity.isValid()) return;
+         int randomizedKey = ThreadLocalRandom.current().nextInt(list.size());
+         String tempName = list.get(randomizedKey);
+         entity.setCustomName(ChatColorConverter.convert(tempName));
+         new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> {
+             if (!entity.isValid())
+                 return;
+             entity.setCustomName(eliteEntity.getName());
+         }, 4 * 20L);
+     }
 
     /**
      * Runs when the Elite Mob targets a player

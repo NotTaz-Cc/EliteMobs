@@ -291,13 +291,18 @@ For each file, perform these steps:
 - [x] **MeteorShower.java** - Meteor shower power (1 BukkitRunnable) ✅
 - [x] **LightningBolts.java** - Lightning bolts power (2 BukkitRunnable) ✅
 
-**Status: MEDIUM PRIORITY (16/~60+ files) - IN PROGRESS**
+**Newly Converted - Round 6 (2 Power files):**
+- [x] **Taunt.java** - Taunt power (1 BukkitRunnable) ✅
+- [x] **MovementSpeed.java** - Movement speed power (1 BukkitRunnable) ✅
+
+**Status: MEDIUM PRIORITY (18/~60+ files) - IN PROGRESS (30% complete)**
 
 **Progress Summary:**
-- Phase 1 (High Priority): 25/25 ✅
-- Phase 2 (Medium Priority): 16/60+ (26.6% estimated)
-- Remaining Power files: ~46 files
-- Other systems: EntityTracker, CustomSpawn, PlayerPotionEffects, etc.
+- Phase 1 (High Priority): 25/25 ✅ (100% complete)
+- Phase 2 (Medium Priority): 18/60+ (30% estimated)
+- Power Files Converted: 5/49
+- Remaining Priority Files: EntityTracker (4), CustomSpawn (7), GoldExplosion (2), + 40+ other power files
+- Critical Path: Instance management (done), events (done), combat system (done)
 
 **Next To Convert (High Impact):**
 - EliteEntity.java - Elite entity system
