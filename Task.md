@@ -295,14 +295,18 @@ For each file, perform these steps:
 - [x] **Taunt.java** - Taunt power (1 BukkitRunnable) ✅
 - [x] **MovementSpeed.java** - Movement speed power (1 BukkitRunnable) ✅
 
-**Status: MEDIUM PRIORITY (18/~60+ files) - IN PROGRESS (30% complete)**
+**Newly Converted - Round 7 (2 Power files):**
+- [x] **GoldExplosion.java** - Gold explosion power (1 BukkitRunnable) ✅
+- [x] **ArrowFireworks.java** - Arrow fireworks power (1 BukkitRunnable) ✅
+
+**Status: MEDIUM PRIORITY (20/~60+ files) - IN PROGRESS (33% complete)**
 
 **Progress Summary:**
 - Phase 1 (High Priority): 25/25 ✅ (100% complete)
-- Phase 2 (Medium Priority): 18/60+ (30% estimated)
-- Power Files Converted: 5/49
-- Remaining Priority Files: EntityTracker (4), CustomSpawn (7), GoldExplosion (2), + 40+ other power files
-- Critical Path: Instance management (done), events (done), combat system (done)
+- Phase 2 (Medium Priority): 20/60+ (33% estimated)
+- Power Files Converted: 7/49 (14% complete)
+- Remaining Priority Files: EntityTracker (4), CustomSpawn (7), AttackArrow/Fireball/Lightning (6), + 35+ other power files
+- Critical Path: Instance management ✅, events ✅, combat system ✅, major powers in progress
 
 **Next To Convert (High Impact):**
 - EliteEntity.java - Elite entity system
