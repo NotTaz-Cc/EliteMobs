@@ -4,16 +4,17 @@ import com.magmaguy.elitemobs.api.EliteMobEnterCombatEvent;
 import com.magmaguy.elitemobs.api.EliteMobExitCombatEvent;
 import com.magmaguy.elitemobs.config.powers.PowersConfigFields;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class CombatEnterScanPower extends MajorPower implements Listener {
 
     public static HashSet<CombatEnterScanPower> combatEnterScanPowers = new HashSet<>();
-    public BukkitTask bukkitTask = null;
+    public AtomicReference<TaskScheduler.TaskWrapper> taskReference = new AtomicReference<>();
     private boolean isActive = false;
 
     public CombatEnterScanPower(PowersConfigFields powersConfigFields) {
@@ -34,7 +35,10 @@ public abstract class CombatEnterScanPower extends MajorPower implements Listene
     protected abstract void finishActivation(EliteEntity eliteEntity);
 
     public void deactivate(EliteEntity eliteEntity) {
-        if (bukkitTask != null && !bukkitTask.isCancelled()) bukkitTask.cancel();
+        TaskScheduler.TaskWrapper taskWrapper = taskReference.getAndSet(null);
+        if (taskWrapper != null) {
+            taskWrapper.cancel();
+        }
         isActive = false;
         finishDeactivation(eliteEntity);
     }
