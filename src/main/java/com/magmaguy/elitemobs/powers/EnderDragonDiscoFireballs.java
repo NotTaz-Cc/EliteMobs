@@ -7,23 +7,24 @@ import com.magmaguy.elitemobs.entitytracker.EntityTracker;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.CombatEnterScanPower;
 import com.magmaguy.elitemobs.utils.EnderDragonPhaseSimplifier;
+import me.MinhTaz.FoliaLib.TaskScheduler;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fireball;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EnderDragonDiscoFireballs extends CombatEnterScanPower {
 
     int randomTiltSeed;
     private ArrayList<Vector> relativeLocationOffsets;
     private ArrayList<Location> realLocations = new ArrayList<>();
-    private int warningCounter = 0;
+    private AtomicInteger warningCounter = new AtomicInteger(0);
     private ArrayList<Fireball> fireballs = new ArrayList<>();
 
     public EnderDragonDiscoFireballs() {
@@ -32,133 +33,67 @@ public class EnderDragonDiscoFireballs extends CombatEnterScanPower {
 
     @Override
     protected void finishActivation(EliteEntity eliteEntity) {
-        super.bukkitTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (doExit(eliteEntity) || isInCooldown(eliteEntity)) {
-                    return;
-                }
-
-                if (eliteEntity.getLivingEntity().getType().equals(EntityType.ENDER_DRAGON))
-                    if (!EnderDragonPhaseSimplifier.isLanded(((EnderDragon) eliteEntity.getLivingEntity()).getPhase()))
-                        return;
-
-                doPower(eliteEntity);
+        TaskScheduler scheduler = new TaskScheduler(MetadataHandler.PLUGIN);
+        TaskScheduler.TaskWrapper taskWrapper = scheduler.runTimerAsync(() -> {
+            if (doExit(eliteEntity) || isInCooldown(eliteEntity)) {
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 10);
+
+            if (eliteEntity.getLivingEntity().getType().equals(EntityType.ENDER_DRAGON))
+                if (!EnderDragonPhaseSimplifier.isLanded(((EnderDragon) eliteEntity.getLivingEntity()).getPhase()))
+                    return;
+
+            doPower(eliteEntity);
+        }, 0, 10);
+        super.taskReference.set(taskWrapper);
+    }
+
+    private void doPower(EliteEntity eliteEntity) {
+        if (warningCounter.get() == 0) {
+            relativeLocationOffsets = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                Vector offset = new Vector(ThreadLocalRandom.current().nextDouble(-5, 5), 0, ThreadLocalRandom.current().nextDouble(-5, 5));
+                relativeLocationOffsets.add(offset);
+            }
+        }
+
+        if (warningCounter.get() < 40) {
+            for (Vector vector : relativeLocationOffsets) {
+                Location particleLocation = eliteEntity.getLivingEntity().getLocation().clone().add(vector);
+                particleLocation.getWorld().spawnParticle(Particle.FLAME, particleLocation, 1, 0.5, 0.5, 0.5, 0);
+            }
+            warningCounter.incrementAndGet();
+        } else {
+            if (realLocations.isEmpty()) {
+                for (Vector vector : relativeLocationOffsets) {
+                    realLocations.add(eliteEntity.getLivingEntity().getLocation().clone().add(vector));
+                }
+            }
+
+            for (Location location : realLocations) {
+                for (int i = 0; i < 3; i++) {
+                    Vector shootDirection = new Vector(ThreadLocalRandom.current().nextDouble(-1, 1), ThreadLocalRandom.current().nextDouble(0, 2), ThreadLocalRandom.current().nextDouble(-1, 1)).normalize();
+                    Fireball fireball = (Fireball) EliteProjectile.create(EntityType.FIREBALL, eliteEntity.getLivingEntity(), null, shootDirection, true);
+                    // fireball.setLocation(location); // Not available in this API version
+                    EntityTracker.registerProjectileEntity(fireball);
+                    fireball.setVelocity(shootDirection.multiply(2));
+                    fireball.setYield(3F);
+                    fireballs.add(fireball);
+                }
+            }
+
+            warningCounter.set(0);
+            realLocations.clear();
+            relativeLocationOffsets.clear();
+        }
     }
 
     @Override
     protected void finishDeactivation(EliteEntity eliteEntity) {
-
-    }
-
-    private void doPower(EliteEntity eliteEntity) {
-        doCooldown(eliteEntity);
-
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-
-                if (doExit(eliteEntity) ||
-                        eliteEntity.getLivingEntity().getType().equals(EntityType.ENDER_DRAGON) &&
-                                !EnderDragonPhaseSimplifier.isLanded(((EnderDragon) eliteEntity.getLivingEntity()).getPhase())) {
-                    cancel();
-                    return;
-                }
-
-                if (eliteEntity.getLivingEntity().getType().equals(EntityType.ENDER_DRAGON))
-                    ((EnderDragon) eliteEntity.getLivingEntity()).setPhase(EnderDragon.Phase.SEARCH_FOR_BREATH_ATTACK_TARGET);
-
-                if (counter == 0) {
-                    //todo: reset fields if needed
-                    generateLocations();
-                    commitLocations(eliteEntity);
-                    randomTiltSeed = ThreadLocalRandom.current().nextInt();
-                    warningCounter = 0;
-                }
-
-                if (counter < 20 * 6) {
-                    //todo: warning phase
-                    doWarningPhase(eliteEntity);
-                    warningCounter++;
-                }
-
-                if (counter > 20 * 6) {
-                    doDamagePhase(eliteEntity);
-                    cancel();
-                }
-
-                counter++;
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-    }
-
-    private void generateLocations() {
-        relativeLocationOffsets = new ArrayList<>();
-        for (int i = 0; i < 12; i++)
-            relativeLocationOffsets.add(new Vector(7, 0, 0).rotateAroundY(2D * Math.PI / 12D * i));
-    }
-
-    private void commitLocations(EliteEntity eliteEntity) {
-        realLocations = new ArrayList<>();
-        for (Vector vector : relativeLocationOffsets)
-            realLocations.add(eliteEntity.getLivingEntity().getLocation().clone().add(vector));
-    }
-
-    private void doWarningPhase(EliteEntity eliteEntity) {
-        //spawn fireballs and start rotation
-        if (warningCounter == 0) {
-            fireballs = new ArrayList<>();
-            for (Location location : realLocations) {
-                Fireball fireball = (Fireball) location.getWorld().spawnEntity(location, EntityType.FIREBALL);
-                EntityTracker.registerProjectileEntity(fireball);
-                EliteProjectile.signExplosiveWithPower(fireball, getFileName());
-                fireballs.add(fireball);
-            }
-        }
-
-        warningCounter++;
-
-        for (Fireball fireball : fireballs) {
-            if (fireball.isValid()) {
-
-                if (warningCounter % 5 == 0) {
-                    Vector relativeLocation = fireball.getLocation().clone().subtract(eliteEntity.getLivingEntity().getLocation())
-                            .toVector().rotateAroundY(2D * Math.PI / 96D);
-                    Location rotatedLocation = eliteEntity.getLivingEntity().getLocation().clone().add(relativeLocation);
-                    Vector velocity = rotatedLocation.clone().subtract(fireball.getLocation()).toVector().multiply(0.001);
-                    fireball.setDirection(velocity);
-                    fireball.setVelocity(velocity);
-                    fireball.setYield(5F);
-                }
-
-                generateVisualParticles(eliteEntity, fireball);
-            }
-        }
-
-    }
-
-    private void doDamagePhase(EliteEntity eliteEntity) {
-        for (Fireball fireball : fireballs)
-            fireball.setDirection(generateDownwardsVector(eliteEntity, fireball).multiply(0.1));
-    }
-
-    private Vector generateDownwardsVector(EliteEntity eliteEntity, Fireball fireball) {
-        double yValue = Math.cos(warningCounter) / 2 - 0.5;
-        return fireball.getLocation().clone().subtract(eliteEntity.getLivingEntity().getLocation()).toVector().normalize().setY(yValue);
-    }
-
-    private void generateVisualParticles(EliteEntity eliteEntity, Fireball fireball) {
-        Vector downwardsVector = generateDownwardsVector(eliteEntity, fireball);
-        Location particleLocation = fireball.getLocation().clone();
-        for (int i = 0; i < 200; i++) {
-            particleLocation.add(downwardsVector.clone().multiply(0.3));
-            if (!particleLocation.getBlock().isPassable()) break;
-            fireball.getWorld().spawnParticle(Particle.SMOKE, particleLocation, 1, 1, 0, 0, 0);
-        }
+        warningCounter.set(0);
+        realLocations.clear();
+        relativeLocationOffsets.clear();
+        fireballs.clear();
     }
 
 }
