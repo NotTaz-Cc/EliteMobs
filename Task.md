@@ -280,9 +280,13 @@ For each file, perform these steps:
 **Newly Converted - Round 3 (3 files):**
 - [x] **EliteEntity.java** - Elite entity system (4 BukkitRunnable) ✅
 - [x] **NPCEntity.java** - NPC system (2 BukkitRunnable) ✅
-- [x] **Explosion.java** - Will convert next
+- [x] **Explosion.java** - Explosion regen system (1 BukkitRunnable) ✅
 
-**Status: MEDIUM PRIORITY (10/~60+ files) - IN PROGRESS**
+**Newly Converted - Round 4 (2 files - Instance Management):**
+- [x] **DungeonInstance.java** - Dungeon instance system (3 scheduler calls) ✅
+- [x] **ArenaInstance.java** - Arena instance system (1 BukkitRunnable) ✅
+
+**Status: MEDIUM PRIORITY (12/~60+ files) - IN PROGRESS**
 
 **Next To Convert (High Impact):**
 - EliteEntity.java - Elite entity system
