@@ -6,18 +6,21 @@ import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class GoldShotgun extends BossPower implements Listener {
 
@@ -42,33 +45,32 @@ public class GoldShotgun extends BossPower implements Listener {
         eliteEntity.getLivingEntity().setAI(false);
         Vector shotVector = player.getLocation().add(new Vector(0, 1, 0)).toVector().subtract(eliteEntity.getLivingEntity().getLocation().toVector()).normalize().multiply(.5);
 
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-
-                if (!eliteEntity.isValid()) {
-                    cancel();
-                    return;
-                }
-
-                if (counter % 10 == 0)
-                    doSmokeEffect(eliteEntity, shotVector);
-                counter++;
-
-                if (counter < 20 * 3) return;
-
-                cancel();
-                eliteEntity.getLivingEntity().setAI(true);
-                List<Item> nuggetList = generateVisualItems(eliteEntity, shotVector);
-                if (nuggetList == null) return;
-                ProjectileDamage.doGoldNuggetDamage(nuggetList, eliteEntity);
-
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            if (!eliteEntity.isValid()) {
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
             }
 
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+            int currentCount = counter.get();
+            if (currentCount % 10 == 0)
+                doSmokeEffect(eliteEntity, shotVector);
+            counter.incrementAndGet();
 
+            if (currentCount < 20 * 3) return;
+
+            TaskWrapper t = taskRef.get();
+            if (t != null) t.cancel();
+            eliteEntity.getLivingEntity().setAI(true);
+            List<Item> nuggetList = generateVisualItems(eliteEntity, shotVector);
+            if (nuggetList == null) return;
+            ProjectileDamage.doGoldNuggetDamage(nuggetList, eliteEntity);
+        }, 0, 1);
+        
+        taskRef.set(task);
     }
 
     private void doSmokeEffect(EliteEntity eliteEntity, Vector shotVector) {

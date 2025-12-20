@@ -5,15 +5,18 @@ import com.magmaguy.elitemobs.api.EliteMobDamagedByPlayerEvent;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.powers.meta.MajorPower;
 import com.magmaguy.elitemobs.powerstances.GenericRotationMatrixMath;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class SkeletonPillar extends MajorPower implements Listener {
 
@@ -43,36 +46,29 @@ public class SkeletonPillar extends MajorPower implements Listener {
         Location location2 = event.getEliteMobEntity().getLivingEntity().getLocation().clone()
                 .add(locationMover(event.getEliteMobEntity().getLivingEntity().getLocation().clone(), 20, -7));
 
-        new BukkitRunnable() {
-
-            int timer = 1;
-
-            @Override
-            public void run() {
-
-                if (timer > 20 * 7 || !event.getEliteMobEntity().isValid()) {
-
-                    if (event.getEliteMobEntity().getLivingEntity() != null)
-                        event.getEliteMobEntity().getLivingEntity().setAI(true);
-                    cancel();
-
-                } else if (timer > 20 && timer < 20 * 7) {
-
-                    pillarEffect(event.getEliteMobEntity().getLivingEntity().getLocation().clone(), timer, 7);
-                    pillarEffect(event.getEliteMobEntity().getLivingEntity().getLocation().clone(), timer, -7);
-
-                } else {
-
-                    pillarWarningEffect(location1);
-                    pillarWarningEffect(location2);
-
-                }
-
-                timer++;
-
+        AtomicInteger timer = new AtomicInteger(1);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentTimer = timer.get();
+            
+            if (currentTimer > 20 * 7 || !event.getEliteMobEntity().isValid()) {
+                if (event.getEliteMobEntity().getLivingEntity() != null)
+                    event.getEliteMobEntity().getLivingEntity().setAI(true);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+            } else if (currentTimer > 20 && currentTimer < 20 * 7) {
+                pillarEffect(event.getEliteMobEntity().getLivingEntity().getLocation().clone(), currentTimer, 7);
+                pillarEffect(event.getEliteMobEntity().getLivingEntity().getLocation().clone(), currentTimer, -7);
+            } else {
+                pillarWarningEffect(location1);
+                pillarWarningEffect(location2);
             }
-
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+            
+            timer.incrementAndGet();
+        }, 0, 1);
+        
+        taskRef.set(task);
 
     }
 
@@ -106,13 +102,12 @@ public class SkeletonPillar extends MajorPower implements Listener {
 
     private void playPillarSong(Location location) {
         soundLocation = location;
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                switch (counter) {
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentCount = counter.incrementAndGet();
+            switch (currentCount) {
                     case 1:
                         playSound(d());
                         break;
@@ -246,13 +241,15 @@ public class SkeletonPillar extends MajorPower implements Listener {
                         playSound(gHigher());
                         break;
                     case 80:
-                        cancel();
+                        TaskWrapper t = taskRef.get();
+                        if (t != null) t.cancel();
                         break;
                     default:
                         break;
                 }
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 1, 2);
+        }, 1, 2);
+        
+        taskRef.set(task);
     }
 
     private void playSound(float pitch) {

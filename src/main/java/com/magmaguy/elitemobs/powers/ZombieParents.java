@@ -8,11 +8,13 @@ import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
 import com.magmaguy.elitemobs.powers.meta.MajorPower;
 import com.magmaguy.magmacore.util.Logger;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Created by MagmaGuy on 13/05/2017.
@@ -24,17 +26,19 @@ public class ZombieParents extends MajorPower implements Listener {
     }
 
     private static void startDialog(CustomBossEntity reinforcementMom, CustomBossEntity reinforcementDad, EliteEntity bossEntity) {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!bossEntity.isValid()) {
-                    doDeathMessages(reinforcementDad, reinforcementMom);
-                    cancel();
-                } else {
-                    doDialog(reinforcementDad, reinforcementMom, bossEntity);
-                }
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            if (!bossEntity.isValid()) {
+                doDeathMessages(reinforcementDad, reinforcementMom);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+            } else {
+                doDialog(reinforcementDad, reinforcementMom, bossEntity);
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 20, 20L * 8);
+        }, 20, 20L * 8);
+        
+        taskRef.set(task);
     }
 
     private static void doDeathMessages(CustomBossEntity reinforcementDad, CustomBossEntity reinforcementMom) {
@@ -72,15 +76,10 @@ public class ZombieParents extends MajorPower implements Listener {
     }
 
     private static void nameClearer(EliteEntity eliteEntity) {
-
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (eliteEntity.isValid())
-                    eliteEntity.setName(eliteEntity.getName(), true);
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, 20L * 3);
-
+        new TaskScheduler(MetadataHandler.PLUGIN).runDelayedAsync(() -> {
+            if (eliteEntity.isValid())
+                eliteEntity.setName(eliteEntity.getName(), true);
+        }, 20L * 3);
     }
 
     @EventHandler

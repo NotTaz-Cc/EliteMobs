@@ -5,14 +5,17 @@ import com.magmaguy.elitemobs.api.EliteMobTargetPlayerEvent;
 import com.magmaguy.elitemobs.combatsystem.EliteProjectile;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.powers.meta.MinorPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.projectiles.ProjectileSource;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Created by MagmaGuy on 06/05/2017.
@@ -70,38 +73,34 @@ public class AttackFireball extends MinorPower implements Listener {
     }
 
     private void repeatingFireballTask(Monster monster, AttackFireball attackFireball) {
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            if (!monster.isValid() || monster.getTarget() == null) {
+                attackFireball.setFiring(false);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
+            }
 
-        new BukkitRunnable() {
+            for (Entity nearbyEntity : monster.getNearbyEntities(20, 20, 20)) {
+                if (nearbyEntity instanceof Player) {
+                    Player targetPlayer = (Player) nearbyEntity;
+                    if (targetPlayer.getGameMode().equals(GameMode.ADVENTURE) ||
+                            targetPlayer.getGameMode().equals(GameMode.SURVIVAL)) {
 
-            @Override
-            public void run() {
-
-                if (!monster.isValid() || monster.getTarget() == null) {
-                    attackFireball.setFiring(false);
-                    cancel();
-                    return;
-                }
-
-                for (Entity nearbyEntity : monster.getNearbyEntities(20, 20, 20)) {
-                    if (nearbyEntity instanceof Player) {
-                        Player targetPlayer = (Player) nearbyEntity;
-                        if (targetPlayer.getGameMode().equals(GameMode.ADVENTURE) ||
-                                targetPlayer.getGameMode().equals(GameMode.SURVIVAL)) {
-
-                            // Shoot fireball with null check
-                            Fireball fireball = shootFireball(monster, targetPlayer);
-                            if (fireball == null) {
-                                // Log or handle the case where fireball creation failed
-                                MetadataHandler.PLUGIN.getLogger().warning("Failed to create fireball for entity at " + monster.getLocation());
-                            }
+                        // Shoot fireball with null check
+                        Fireball fireball = shootFireball(monster, targetPlayer);
+                        if (fireball == null) {
+                            // Log or handle the case where fireball creation failed
+                            MetadataHandler.PLUGIN.getLogger().warning("Failed to create fireball for entity at " + monster.getLocation());
                         }
                     }
                 }
-
             }
-
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 20L * 8);
-
+        }, 0, 20L * 8);
+        
+        taskRef.set(task);
     }
 
 }

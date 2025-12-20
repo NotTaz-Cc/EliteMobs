@@ -6,11 +6,14 @@ import com.magmaguy.elitemobs.combatsystem.EliteProjectile;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.MinorPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.GameMode;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Created by MagmaGuy on 06/05/2017.
@@ -37,29 +40,25 @@ public class AttackArrow extends MinorPower implements Listener {
     }
 
     private void repeatingArrowTask(AttackArrow attackArrow, EliteEntity eliteEntity) {
-
-        new BukkitRunnable() {
-
-            @Override
-            public void run() {
-
-                if (!eliteEntity.isValid() || ((Monster) eliteEntity.getLivingEntity()).getTarget() == null) {
-                    attackArrow.setFiring(false);
-                    cancel();
-                    return;
-                }
-
-                for (Entity nearbyEntity : eliteEntity.getLivingEntity().getNearbyEntities(20, 20, 20))
-                    if (nearbyEntity instanceof Player player)
-                        if (!player.isDead() &&
-                                (player.getGameMode().equals(GameMode.ADVENTURE) ||
-                                        player.getGameMode().equals(GameMode.SURVIVAL)))
-                            shootArrow(eliteEntity.getLivingEntity(), (Player) nearbyEntity);
-
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            if (!eliteEntity.isValid() || ((Monster) eliteEntity.getLivingEntity()).getTarget() == null) {
+                attackArrow.setFiring(false);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
             }
 
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 20 * 8);
-
+            for (Entity nearbyEntity : eliteEntity.getLivingEntity().getNearbyEntities(20, 20, 20))
+                if (nearbyEntity instanceof Player player)
+                    if (!player.isDead() &&
+                            (player.getGameMode().equals(GameMode.ADVENTURE) ||
+                                    player.getGameMode().equals(GameMode.SURVIVAL)))
+                        shootArrow(eliteEntity.getLivingEntity(), (Player) nearbyEntity);
+        }, 0, 20 * 8);
+        
+        taskRef.set(task);
     }
 
 }
