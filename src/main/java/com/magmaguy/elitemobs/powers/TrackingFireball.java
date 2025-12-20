@@ -5,17 +5,20 @@ import com.magmaguy.elitemobs.api.EliteMobTargetPlayerEvent;
 import com.magmaguy.elitemobs.combatsystem.EliteProjectile;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.powers.meta.MajorPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.GameMode;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.projectiles.ProjectileSource;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class TrackingFireball extends MajorPower {
 
@@ -52,28 +55,24 @@ public class TrackingFireball extends MajorPower {
         private class TrackingFireballTasks {
 
             public TrackingFireballTasks(Monster monster, TrackingFireball trackingFireball) {
-
-                new BukkitRunnable() {
-
-                    @Override
-                    public void run() {
-
-                        if (!monster.isValid() || monster.getTarget() == null) {
-                            trackingFireball.setFiring(false);
-                            cancel();
-                            return;
-                        }
-
-                        for (Entity nearbyEntity : monster.getNearbyEntities(20, 20, 20))
-                            if (nearbyEntity instanceof Player)
-                                if (((Player) nearbyEntity).getGameMode().equals(GameMode.ADVENTURE) ||
-                                        ((Player) nearbyEntity).getGameMode().equals(GameMode.SURVIVAL))
-                                    new TrackingFireballTask(monster, (Player) nearbyEntity);
-
+                AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+                
+                TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+                    if (!monster.isValid() || monster.getTarget() == null) {
+                        trackingFireball.setFiring(false);
+                        TaskWrapper t = taskRef.get();
+                        if (t != null) t.cancel();
+                        return;
                     }
 
-                }.runTaskTimer(MetadataHandler.PLUGIN, 0, 20 * 8);
-
+                    for (Entity nearbyEntity : monster.getNearbyEntities(20, 20, 20))
+                        if (nearbyEntity instanceof Player)
+                            if (((Player) nearbyEntity).getGameMode().equals(GameMode.ADVENTURE) ||
+                                    ((Player) nearbyEntity).getGameMode().equals(GameMode.SURVIVAL))
+                                new TrackingFireballTask(monster, (Player) nearbyEntity);
+                }, 0, 20 * 8);
+                
+                taskRef.set(task);
             }
 
             public class TrackingFireballTask {
@@ -88,31 +87,33 @@ public class TrackingFireball extends MajorPower {
                     repeatingFireball.setShooter((ProjectileSource) entity);
                     trackingFireballs.put(repeatingFireball.getUniqueId(), this);
 
-                    new BukkitRunnable() {
-                        int counter = 0;
-
-                        @Override
-                        public void run() {
-                            if (repeatingFireball == null ||
-                                    !repeatingFireball.isValid() ||
-                                    !entity.isValid() ||
-                                    player.isDead() ||
-                                    counter > 20 * 60 * 3 ||
-                                    repeatingFireball.getLocation().getWorld() != player.getWorld()) {
-                                cancel();
-                                return;
-                            }
-
-                            if (isAfterPlayer) {
-                                repeatingFireball.setDirection(setFireballDirection(player));
-                                repeatingFireball.setVelocity(setFireballDirection(player));
-                            } else {
-                                repeatingFireball.setDirection(setFireballDirection(entity));
-                                repeatingFireball.setVelocity(setFireballDirection(entity));
-                            }
-                            counter++;
+                    AtomicInteger counter = new AtomicInteger(0);
+                    AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+                    
+                    TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+                        int currentCount = counter.get();
+                        if (repeatingFireball == null ||
+                                !repeatingFireball.isValid() ||
+                                !entity.isValid() ||
+                                player.isDead() ||
+                                currentCount > 20 * 60 * 3 ||
+                                repeatingFireball.getLocation().getWorld() != player.getWorld()) {
+                            TaskWrapper t = taskRef.get();
+                            if (t != null) t.cancel();
+                            return;
                         }
-                    }.runTaskTimer(MetadataHandler.PLUGIN, 1, 1);
+
+                        if (isAfterPlayer) {
+                            repeatingFireball.setDirection(setFireballDirection(player));
+                            repeatingFireball.setVelocity(setFireballDirection(player));
+                        } else {
+                            repeatingFireball.setDirection(setFireballDirection(entity));
+                            repeatingFireball.setVelocity(setFireballDirection(entity));
+                        }
+                        counter.incrementAndGet();
+                    }, 1, 1);
+                    
+                    taskRef.set(task);
                 }
 
 

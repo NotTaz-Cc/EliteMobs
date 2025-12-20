@@ -8,17 +8,20 @@ import com.magmaguy.elitemobs.events.BossCustomAttackDamage;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
 import com.magmaguy.elitemobs.powerstances.GenericRotationMatrixMath;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DeathSlice extends BossPower implements Listener {
 
@@ -29,30 +32,32 @@ public class DeathSlice extends BossPower implements Listener {
     private static void doDeathSlice(EliteEntity eliteEntity) {
         ArrayList<Location> locations = raytracedLocationList(eliteEntity.getLivingEntity().getLocation());
         eliteEntity.getLivingEntity().setAI(false);
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                if (counter > 20 * 5 || !eliteEntity.isValid()) {
-                    if (eliteEntity.getLivingEntity() != null)
-                        eliteEntity.getLivingEntity().setAI(true);
-                    cancel();
-                    return;
-                }
-
-                if (counter < 20 * 2.5) {
-                    for (Location location : locations)
-                        doWarningParticle(location);
-                } else {
-                    for (Location location : locations)
-                        doDamagePhase(location, eliteEntity);
-                }
-
-                counter++;
+        
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentCount = counter.get();
+            if (currentCount > 20 * 5 || !eliteEntity.isValid()) {
+                if (eliteEntity.getLivingEntity() != null)
+                    eliteEntity.getLivingEntity().setAI(true);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 2);
 
+            if (currentCount < 20 * 2.5) {
+                for (Location location : locations)
+                    doWarningParticle(location);
+            } else {
+                for (Location location : locations)
+                    doDamagePhase(location, eliteEntity);
+            }
+
+            counter.incrementAndGet();
+        }, 0, 2);
+        
+        taskRef.set(task);
     }
 
     private static ArrayList<Location> raytracedLocationList(Location originalLocation) {
