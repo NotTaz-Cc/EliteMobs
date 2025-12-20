@@ -6,16 +6,19 @@ import com.magmaguy.elitemobs.collateralminecraftchanges.LightningSpawnBypass;
 import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Thunderstorm extends BossPower implements Listener {
 
@@ -26,55 +29,55 @@ public class Thunderstorm extends BossPower implements Listener {
     public static void doThunderstorm(EliteEntity eliteEntity) {
         if (eliteEntity == null || !eliteEntity.getLivingEntity().isValid()) return;
         eliteEntity.getLivingEntity().setAI(false);
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                if (counter > 20 * 5 || eliteEntity.getLivingEntity() == null || !eliteEntity.getLivingEntity().isValid()) {
-                    cancel();
-                    if (eliteEntity.getLivingEntity() != null)
-                        eliteEntity.getLivingEntity().setAI(true);
-                    return;
-                }
-
-                if (counter % 2 == 0) {
-                    Location randomLocation = eliteEntity.getLivingEntity().getLocation().clone().add(new Vector(
-                            ThreadLocalRandom.current().nextInt(-20, 20),
-                            0,
-                            ThreadLocalRandom.current().nextInt(-20, 20)));
-                    lightningTask(randomLocation);
-                }
-
-
-                if (counter % 20 == 0) {
-                    for (Entity entity : eliteEntity.getLivingEntity().getNearbyEntities(20, 20, 20))
-                        if (entity.getType().equals(EntityType.PLAYER))
-                            lightningTask(entity.getLocation());
-                }
-
+        
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentCount = counter.incrementAndGet();
+            if (currentCount > 20 * 5 || eliteEntity.getLivingEntity() == null || !eliteEntity.getLivingEntity().isValid()) {
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                if (eliteEntity.getLivingEntity() != null)
+                    eliteEntity.getLivingEntity().setAI(true);
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+
+            if (currentCount % 2 == 0) {
+                Location randomLocation = eliteEntity.getLivingEntity().getLocation().clone().add(new Vector(
+                        ThreadLocalRandom.current().nextInt(-20, 20),
+                        0,
+                        ThreadLocalRandom.current().nextInt(-20, 20)));
+                lightningTask(randomLocation);
+            }
+
+            if (currentCount % 20 == 0) {
+                for (Entity entity : eliteEntity.getLivingEntity().getNearbyEntities(20, 20, 20))
+                    if (entity.getType().equals(EntityType.PLAYER))
+                        lightningTask(entity.getLocation());
+            }
+        }, 0, 1);
+        
+        taskRef.set(task);
     }
 
     public static void lightningTask(Location location) {
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                if (counter > 20 * 3) {
-                    LightningSpawnBypass.bypass();
-                    location.getWorld().strikeLightning(location);
-                    cancel();
-                    return;
-                }
-                location.getWorld().spawnParticle(Particle.CRIT, location, 10, 0.5, 1.5, 0.5, 0.3);
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentCount = counter.incrementAndGet();
+            if (currentCount > 20 * 3) {
+                LightningSpawnBypass.bypass();
+                location.getWorld().strikeLightning(location);
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-
+            location.getWorld().spawnParticle(Particle.CRIT, location, 10, 0.5, 1.5, 0.5, 0.3);
+        }, 0, 1);
+        
+        taskRef.set(task);
     }
 
     @EventHandler

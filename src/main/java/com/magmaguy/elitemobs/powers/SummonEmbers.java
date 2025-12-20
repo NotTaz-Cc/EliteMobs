@@ -6,14 +6,17 @@ import com.magmaguy.elitemobs.config.powers.PowersConfig;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
 import com.magmaguy.elitemobs.powers.meta.BossPower;
+import me.MinhTaz.FoliaLib.TaskScheduler;
+import me.MinhTaz.FoliaLib.TaskScheduler.TaskWrapper;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class SummonEmbers extends BossPower implements Listener {
     public SummonEmbers() {
@@ -34,25 +37,27 @@ public class SummonEmbers extends BossPower implements Listener {
 
     private void doSummonParticles(EliteEntity eliteEntity) {
         eliteEntity.getLivingEntity().setAI(false);
-        new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                if (!eliteEntity.isValid()) {
-                    cancel();
-                    return;
-                }
-                eliteEntity.getLivingEntity().getWorld().spawnParticle(Particle.FLAME,
-                        eliteEntity.getLivingEntity().getLocation().add(new Vector(0, 1, 0)), 50, 0.0001, 0.0001, 0.0001);
-                if (counter < 20 * 3) return;
-                cancel();
-                doSummon(eliteEntity);
-                eliteEntity.getLivingEntity().setAI(true);
+        
+        AtomicInteger counter = new AtomicInteger(0);
+        AtomicReference<TaskWrapper> taskRef = new AtomicReference<>();
+        
+        TaskWrapper task = new TaskScheduler(MetadataHandler.PLUGIN).runTimerAsync(() -> {
+            int currentCount = counter.incrementAndGet();
+            if (!eliteEntity.isValid()) {
+                TaskWrapper t = taskRef.get();
+                if (t != null) t.cancel();
+                return;
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-
+            eliteEntity.getLivingEntity().getWorld().spawnParticle(Particle.FLAME,
+                    eliteEntity.getLivingEntity().getLocation().add(new Vector(0, 1, 0)), 50, 0.0001, 0.0001, 0.0001);
+            if (currentCount < 20 * 3) return;
+            TaskWrapper t = taskRef.get();
+            if (t != null) t.cancel();
+            doSummon(eliteEntity);
+            eliteEntity.getLivingEntity().setAI(true);
+        }, 0, 1);
+        
+        taskRef.set(task);
     }
 
     private void doSummon(EliteEntity eliteEntity) {
